@@ -3,28 +3,33 @@
    ========================================================================== */
 'use strict';
 
+/** บิลรับผ้าของลูกค้าแพ็คเกจ: ไม่แสดงราคาต่อชิ้นในใบเสร็จ */
+const isPkgOrder = r => r.kind !== 'pkg' && r.left != null;
+
 function receiptHTML(r) {
   const s = db.shop;
   const L = (a, b, cls = '') => `<div class="rc-l ${cls}"><span>${a}</span><span>${b}</span></div>`;
+  const noPrice = isPkgOrder(r);
   const lines = r.lines.map(l => {
-    const head = L(`${esc(l.t)}${l.q ? ' x' + l.q + (l.unit || '') : ''}`, l.price != null ? '@' + fm(l.price) : '');
-    const sub = (l.note || l.a !== '') ? L(`<small>${esc(l.note || '')}</small>`, l.a === '' ? '' : fm(l.a) + ' บาท') : '';
+    const showAmt = l.a !== '' && !(noPrice && !+l.a);
+    const head = L(`${esc(l.t)}${l.q ? ' x' + l.q + (l.unit || '') : ''}`, l.price != null && !noPrice ? '@' + fm(l.price) : '');
+    const sub = (l.note || showAmt) ? L(`<small>${esc(l.note || '')}</small>`, showAmt ? fm(l.a) + ' บาท' : '') : '';
     return head + sub;
   }).join('');
   let pk = '';
   if (r.left != null) {
     if (r.used != null) {
-      pk = L('ยอดคงเหลือก่อนหน้า', pcs(r.before)) + L('ใช้จากแพ็คเกจเดิม', r.used + ' ชิ้น') +
+      pk = (r.before < 0 ? L('เกินแพ็คเกจจากรอบก่อน', -r.before + ' ชิ้น') : L('ยอดคงเหลือก่อนหน้า', r.before + ' ชิ้น')) +
+        L('ใช้จากแพ็คเกจ', r.used + ' ชิ้น') +
         (r.renewed ? L('เกินแพ็คเกจเดิม', r.overflow + ' ชิ้น') + L('ค่าต่อแพ็คเกจใหม่', fm(r.renewFee) + ' บาท') : '') +
-        (r.carried ? L('เกินแพ็คเกจ (ทบไปแพ็คเกจถัดไป)', r.carried + ' ชิ้น') : '') +
-        L(`<b>คงเหลือ${r.renewed ? 'หลังต่อแพ็คเกจ' : ''}</b>`, `<b>${pcs(r.left)}</b>`);
+        (r.carried ? L('เกินแพ็คเกจครั้งนี้', r.carried + ' ชิ้น') : '');
     } else {
       pk = (r.pieces ? L('แพ็คเกจใหม่', '+' + r.pieces + ' ชิ้น') : '') +
         (r.owedBefore ? L('หักยอดเกินจากรอบก่อน', '−' + r.owedBefore + ' ชิ้น') : '') +
-        (r.kept ? L('ทบยอดคงเหลือเดิม', '+' + r.kept + ' ชิ้น') : '') +
-        L('<b>แพ็คเกจคงเหลือ</b>', `<b>${pcs(r.left)}</b>`);
+        (r.kept ? L('ทบยอดคงเหลือเดิม', '+' + r.kept + ' ชิ้น') : '');
     }
-    if (r.left < 0) pk += `<div class="rc-note">* ยอดค้าง ${-r.left} ชิ้น จะหักจากแพ็คเกจถัดไป</div>`;
+    pk += L(`<b>${r.used != null ? 'คงเหลือ' + (r.renewed ? 'หลังต่อแพ็คเกจ' : '') : 'แพ็คเกจคงเหลือ'}</b>`, `<b>${Math.max(0, r.left)} ชิ้น</b>`);
+    if (r.left < 0) pk += L('<b>เกินแพ็คเกจรวม</b>', `<b>${-r.left} ชิ้น</b>`) + '<div class="rc-note">* ส่วนที่เกินแพ็คเกจจะหักจากแพ็คเกจถัดไป</div>';
   }
   return `<div class="rc">
     ${r.void ? '<div class="rc-void">*** ใบเสร็จนี้ถูกยกเลิกแล้ว ***</div>' : ''}
@@ -52,20 +57,22 @@ function receiptHTML(r) {
 function rcMessage(r) {
   const s = db.shop, out = [];
   out.push(`🧺 ${s.name}`, `ใบเสร็จ ${r.no} · ${dSlash(r.date)} ${r.time || ''}`, `ลูกค้า: ${r.name}`, '');
-  r.lines.forEach(l => out.push(`• ${l.t}${l.q ? ' x' + l.q + (l.unit || '') : ''}${l.a !== '' && l.a != null ? ' = ' + fm(l.a) + ' บาท' : ''}${l.note ? '\n   (' + l.note + ')' : ''}`));
+  const noPrice = isPkgOrder(r);
+  r.lines.forEach(l => out.push(`• ${l.t}${l.q ? ' x' + l.q + (l.unit || '') : ''}${l.a !== '' && l.a != null && !(noPrice && !+l.a) ? ' = ' + fm(l.a) + ' บาท' : ''}${l.note ? '\n   (' + l.note + ')' : ''}`));
   out.push('', `💰 ยอดชำระ ${fm(r.total)} บาท`);
   if (r.left != null) {
     out.push('', '📦 แพ็คเกจ');
     if (r.used != null) {
-      out.push(`ยอดก่อนหน้า ${pcs(r.before)}`, `ใช้ครั้งนี้ ${r.used} ชิ้น`);
-      if (r.carried) out.push(`เกินแพ็คเกจ ${r.carried} ชิ้น → ทบไปหักแพ็คเกจถัดไป`);
+      out.push(r.before < 0 ? `เกินแพ็คเกจจากรอบก่อน ${-r.before} ชิ้น` : `ยอดก่อนหน้า ${r.before} ชิ้น`, `ใช้ครั้งนี้ ${r.used} ชิ้น`);
+      if (r.carried) out.push(`เกินแพ็คเกจครั้งนี้ ${r.carried} ชิ้น`);
       if (r.renewed) out.push(`เกินแพ็คเกจ ${r.overflow} ชิ้น → ต่อแพ็คเกจใหม่ ${fm(r.renewFee)} บาท`);
     } else {
       if (r.pieces) out.push(`แพ็คเกจใหม่ +${r.pieces} ชิ้น`);
       if (r.owedBefore) out.push(`หักยอดเกินจากรอบก่อน −${r.owedBefore} ชิ้น`);
       if (r.kept) out.push(`ทบยอดคงเหลือเดิม +${r.kept} ชิ้น`);
     }
-    out.push(r.left < 0 ? `ค้าง ${-r.left} ชิ้น (จะหักจากแพ็คเกจถัดไป)` : `คงเหลือ ${r.left} ชิ้น`);
+    out.push(`คงเหลือ ${Math.max(0, r.left)} ชิ้น`);
+    if (r.left < 0) out.push(`เกินแพ็คเกจรวม ${-r.left} ชิ้น (จะหักจากแพ็คเกจถัดไป)`);
     if (r.exp) out.push(`ใช้ได้ถึง ${dSlash(r.exp)}`);
   }
   if (r.void) out.unshift('*** ใบเสร็จนี้ถูกยกเลิกแล้ว ***');

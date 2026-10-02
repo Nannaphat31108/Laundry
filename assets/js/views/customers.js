@@ -62,7 +62,7 @@ function editCust(id, onCreated) {
     { k: 'phone', l: 'เบอร์โทร', t: 'tel', ph: '08x-xxx-xxxx', half: true },
     { k: 'line', l: 'ไลน์ไอดี (ถ้ามี)', ph: '@lineid', half: true }
   ].concat(id && c.pkgId ? [
-    { k: 'left', l: 'จำนวนคงเหลือ (ชิ้น)', t: 'number', step: 1, min: -9999, suffix: 'ชิ้น', half: true, hint: 'ติดลบ = ชิ้นที่ค้าง รอหักแพ็คเกจถัดไป' },
+    { k: 'left', l: 'จำนวนคงเหลือ (ชิ้น)', t: 'number', step: 1, min: -9999, suffix: 'ชิ้น', half: true, hint: 'ติดลบ = ชิ้นที่เกินแพ็คเกจ รอหักแพ็คเกจถัดไป' },
     { k: 'exp', l: 'วันหมดอายุ', t: 'date', half: true }
   ] : []);
   formDlg({

@@ -8,8 +8,8 @@ const weightGarments = () => db.garments.filter(g => g.unit == 'กก.');
 
 /**
  * คำนวณยอด: ใช้แพ็คเกจก่อน ส่วนที่เกินจัดการได้ 3 แบบ (state.over)
- *  - carry: ทบเป็นยอดค้าง ไปหักจากแพ็คเกจถัดไป (ค่าเริ่มต้น)
- *  - renew: ต่อแพ็คเกจใหม่ทันที แล้วหักส่วนเกิน (รวมยอดค้างเดิม)
+ *  - carry: ทบเป็นยอดเกิน ไปหักจากแพ็คเกจถัดไป (ค่าเริ่มต้น)
+ *  - renew: ต่อแพ็คเกจใหม่ทันที แล้วหักส่วนเกิน (รวมยอดเกินเดิม)
  *  - cash:  คิดเงินสดตามราคาต่อชิ้น
  */
 function calc() {
@@ -19,7 +19,7 @@ function calc() {
   const kgTot = wtG.reduce((a, g) => a + (cart[g.id] || 0), 0);
   const avail = c && active(c) ? c.left : 0, use = Math.min(avail, pcsTot), overflow = pcsTot - use;
   const owed = owedOf(c);
-  // ยอดตั้งต้น: แพ็คเกจหมดอายุแล้ว ยอดบวกที่เหลือใช้ไม่ได้ แต่ยอดค้างยังอยู่
+  // ยอดตั้งต้น: แพ็คเกจหมดอายุแล้ว ยอดบวกที่เหลือใช้ไม่ได้ แต่ยอดเกินยังอยู่
   const base = hasPkg ? (active(c) ? c.left : Math.min(0, c.left)) : 0;
   const mode = hasPkg && overflow > 0 ? state.over : 'cash';
   let renewInfo = null;
@@ -87,7 +87,7 @@ function customerCard() {
   const strip = c.pkgId ? `<div class="pkg-strip ${active(c) ? '' : 'off'}">
       <div class="pkg-strip-main">
         <div class="pkg-strip-top">${badge(esc(c.pkgName), active(c) ? 'primary' : 'neutral', 'package')}
-          <span>${owed ? `<b class="owed">ค้าง ${owed}</b> ชิ้น` : `คงเหลือ <b>${active(c) ? c.left : 0}</b> ชิ้น`} · ${c.exp < today() ? 'หมดอายุ ' : 'ถึง '}${dTh(c.exp)}</span></div>
+          <span>${owed ? `<b class="owed">เกิน ${owed}</b> ชิ้น` : `คงเหลือ <b>${active(c) ? c.left : 0}</b> ชิ้น`} · ${c.exp < today() ? 'หมดอายุ ' : 'ถึง '}${dTh(c.exp)}</span></div>
         <div class="meter ${st.tone}"><span style="width:${Math.max(0, Math.min(100, c.left / total * 100))}%"></span></div>
         ${owed ? `<p class="strip-note">${icon('info')}ใช้เกินแพ็คเกจรอบก่อน ${owed} ชิ้น — จะหักอัตโนมัติเมื่อซื้อ/ต่อแพ็คเกจใหม่</p>`
           : !active(c) ? `<p class="strip-note">${icon('alert')}แพ็คเกจ${c.exp < today() ? 'หมดอายุแล้ว' : 'ใช้ครบแล้ว'} — ชิ้นที่ส่งมาเลือกทบไปแพ็คเกจถัดไปหรือคิดเงินสดได้</p>` : ''}
@@ -114,16 +114,16 @@ function summaryHTML() {
     const p = pkgById(c.pkgId);
     const cashAmt = cl.lines.reduce((a, l) => a + (l.g.unit != 'กก.' ? (l.q - l.used) * l.g.price : 0), 0);
     const opts = [
-      ['carry', 'ทบไปหักแพ็คเกจถัดไป', `ค้าง ${cl.overflow + cl.owed} ชิ้น · ไม่เก็บเงินตอนนี้`, 'layers'],
+      ['carry', 'ทบไปหักแพ็คเกจถัดไป', `เกินรวม ${cl.overflow + cl.owed} ชิ้น · ไม่เก็บเงินตอนนี้`, 'layers'],
       ['renew', 'ต่อแพ็คเกจใหม่ทันที', p && p.pieces > 0 ? `${esc(p.name)} ${money(p.price * Math.max(1, Math.ceil((cl.overflow + cl.owed) / p.pieces)))}` : 'ไม่พบแพ็คเกจเดิม', 'refresh'],
       ['cash', 'คิดเงินสดส่วนเกิน', money(cashAmt), 'coins']
     ];
     overBox = `<div class="over-box">
-      <div class="over-head">${icon('alert')}<span>เกินแพ็คเกจ <b>${cl.overflow}</b> ชิ้น${cl.owed ? ` (มียอดค้างเดิม ${cl.owed} ชิ้น)` : ''} — เลือกวิธีจัดการ</span></div>
+      <div class="over-head">${icon('alert')}<span>เกินแพ็คเกจ <b>${cl.overflow}</b> ชิ้น${cl.owed ? ` (มียอดเกินจากรอบก่อน ${cl.owed} ชิ้น)` : ''} — เลือกวิธีจัดการ</span></div>
       <div class="over-opts" role="radiogroup">${opts.map(([k, t, d, ic]) => `<button class="over-opt ${state.over === k ? 'on' : ''}" data-act="setOver" data-k="${k}" role="radio" aria-checked="${state.over === k}" ${k === 'renew' && !(p && p.pieces > 0) ? 'disabled' : ''}>
         <span class="over-ic">${icon(ic)}</span><span class="over-txt"><b>${t}</b><small>${d}</small></span><span class="radio"></span></button>`).join('')}</div>
       ${cl.renewInfo ? `<p class="over-note">ต่อแพ็คเกจ${cl.renewInfo.cycles > 1 ? ' x' + cl.renewInfo.cycles : ''} แล้วหัก ${cl.renewInfo.need} ชิ้น → เหลือใหม่ <b>${cl.renewInfo.newLeft}</b> ชิ้น ถึง ${dTh(cl.renewInfo.newExp)}</p>`
-        : cl.mode === 'carry' ? `<p class="over-note">ยอดค้าง <b>${-cl.left}</b> ชิ้น จะหักจากแพ็คเกจถัดไปอัตโนมัติ และพิมพ์แจ้งในใบเสร็จ</p>` : ''}
+        : cl.mode === 'carry' ? `<p class="over-note">ยอดเกินรวม <b>${-cl.left}</b> ชิ้น จะหักจากแพ็คเกจถัดไปอัตโนมัติ และพิมพ์แจ้งในใบเสร็จ</p>` : ''}
     </div>`;
   }
 
