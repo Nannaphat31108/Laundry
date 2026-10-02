@@ -1230,3 +1230,4 @@ label.opt-row { cursor: pointer; }
   input, select, textarea { font-size: 16px; }
   .prn-modes { grid-template-columns: minmax(0, 1fr); }
 }
+.prn-mode .over-txt .badge { align-self: flex-start; margin-top: 6px; }

@@ -5,6 +5,7 @@
 
    วิธีพิมพ์:
    - browser : หน้าต่างพิมพ์ของเบราว์เซอร์ (คอมพิวเตอร์ที่ติดตั้งไดรเวอร์ Xprinter)
+   - ble     : ส่งตรงผ่าน Bluetooth LE (Web Bluetooth: Chrome บน Android) ไม่ต้องติดตั้งแอป
    - usb     : ส่งตรงผ่าน USB (WebUSB: Chrome/Edge บนคอมพิวเตอร์ หรือแท็บเล็ต/มือถือ Android ต่อสาย OTG)
    - serial  : ส่งตรงผ่านพอร์ต COM / Bluetooth ที่จับคู่แล้ว (Web Serial: Chrome/Edge บนคอมพิวเตอร์)
    - rawbt   : ส่งต่อให้แอป RawBT บน Android (รองรับ Bluetooth / USB / LAN)
@@ -15,8 +16,9 @@
 const PRN_KEY = 'laundry_printer';
 const PRN_DEF = { mode: 'browser', paper: 80, cut: true, drawer: false, copies: 1, feed: 4, auto: false, scale: 1, baud: 9600 };
 const PRN_MODES = [
+  { k: 'ble', l: 'Bluetooth โดยตรง', d: 'ไม่ต้องติดตั้งแอป · Chrome บน Android (Xiaomi ฯลฯ) · เครื่องพิมพ์ต้องรองรับ Bluetooth LE', ic: 'bluetooth', free: true },
+  { k: 'usb', l: 'USB โดยตรง', d: 'ไม่ต้องติดตั้งแอป · Chrome บน Android ต่อสาย USB OTG หรือ Chrome/Edge บนคอมพิวเตอร์', ic: 'zap', free: true },
   { k: 'browser', l: 'หน้าต่างพิมพ์ของเบราว์เซอร์', d: 'คอมพิวเตอร์ Windows/Mac ที่ติดตั้งไดรเวอร์ Xprinter แล้ว', ic: 'printer' },
-  { k: 'usb', l: 'USB โดยตรง', d: 'Chrome/Edge บนคอมพิวเตอร์ หรือแท็บเล็ต/มือถือ Android ต่อสาย USB OTG', ic: 'zap' },
   { k: 'rawbt', l: 'แอป RawBT (Android)', d: 'พิมพ์ผ่าน Bluetooth / USB / LAN บนมือถือ-แท็บเล็ต Android', ic: 'phone' },
   { k: 'serial', l: 'Bluetooth / พอร์ต COM', d: 'Chrome/Edge บนคอมพิวเตอร์ ที่จับคู่ Bluetooth กับเครื่องพิมพ์แล้ว', ic: 'refresh' },
   { k: 'image', l: 'บันทึกเป็นรูปภาพ', d: 'iPhone / iPad — แชร์รูปไปพิมพ์ด้วยแอปของเครื่องพิมพ์', ic: 'image' }
@@ -39,6 +41,7 @@ const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.p
 const prnSupport = k => ({
   browser: true,
   usb: 'usb' in navigator,
+  ble: 'bluetooth' in navigator,
   serial: 'serial' in navigator,
   rawbt: isAndroid(),
   image: true
@@ -234,6 +237,46 @@ async function serialSend(bytes, ask) {
   finally { w.releaseLock(); }
 }
 
+/* Bluetooth LE (Web Bluetooth): บริการส่งข้อมูลที่เครื่องพิมพ์ความร้อนจีนนิยมใช้ */
+const BLE_SERVICES = [
+  '000018f0-0000-1000-8000-00805f9b34fb', 'e7810a71-73ae-499d-8c15-faa9aef0c3f2',
+  '49535343-fe7d-4ae5-8fa9-9fafd205e455', '0000ff00-0000-1000-8000-00805f9b34fb',
+  '0000ffe0-0000-1000-8000-00805f9b34fb', '0000fee7-0000-1000-8000-00805f9b34fb',
+  '0000ae30-0000-1000-8000-00805f9b34fb', '0000ffb0-0000-1000-8000-00805f9b34fb'
+];
+let bleDev = null, bleChar = null;
+async function bleConnect(ask) {
+  if (!('bluetooth' in navigator)) throw new Error('เบราว์เซอร์นี้ไม่รองรับ Bluetooth โดยตรง (ใช้ Chrome บน Android)');
+  if (bleDev && bleDev.gatt.connected && bleChar) return bleChar;
+  if (!bleDev && navigator.bluetooth.getDevices) bleDev = (await navigator.bluetooth.getDevices())[0] || null;
+  if (!bleDev) {
+    if (!ask) throw new Error('ยังไม่ได้เชื่อมต่อเครื่องพิมพ์ Bluetooth');
+    bleDev = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: BLE_SERVICES });
+    bleDev.addEventListener('gattserverdisconnected', () => { bleChar = null; });
+  }
+  const server = await bleDev.gatt.connect();
+  let found = null;
+  for (const svc of await server.getPrimaryServices().catch(() => [])) {
+    for (const ch of await svc.getCharacteristics().catch(() => [])) {
+      if (ch.properties.writeWithoutResponse || ch.properties.write) { found = ch; break; }
+    }
+    if (found) break;
+  }
+  if (!found) { bleDev.gatt.disconnect(); bleDev = null; throw new Error('เครื่องพิมพ์นี้ไม่รองรับ Bluetooth LE — ใช้สาย USB OTG (วิธี “USB โดยตรง”) หรือแอป RawBT แทน'); }
+  bleChar = found;
+  prnSave({ bleName: bleDev.name || 'Bluetooth Printer' });
+  return bleChar;
+}
+async function bleSend(bytes, ask) {
+  const ch = await bleConnect(ask);
+  const fast = ch.properties.writeWithoutResponse, size = fast ? 180 : 240;
+  for (let i = 0, n = 0; i < bytes.length; i += size, n++) {
+    const part = bytes.slice(i, i + size);
+    if (fast) { await ch.writeValueWithoutResponse(part); if (n % 8 === 7) await new Promise(r => setTimeout(r, 25)); }
+    else await ch.writeValueWithResponse(part);
+  }
+}
+
 function rawbtSend(bytes) {
   let bin = '';
   for (let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
@@ -259,6 +302,7 @@ async function printReceipt(r, { ask = true } = {}) {
   try {
     // USB/Serial: ขอสิทธิ์ทันทีขณะยังอยู่ในจังหวะที่ผู้ใช้กดปุ่ม
     if (opt.mode === 'usb') await usbConnect(ask);
+    if (opt.mode === 'ble') await bleConnect(ask);
     if (opt.mode === 'serial') await serialConnect(ask);
     const canvas = await receiptCanvas(r, opt);
     if (opt.mode === 'image') return await imageShare(canvas, 'ใบเสร็จ-' + r.no);
@@ -267,12 +311,13 @@ async function printReceipt(r, { ask = true } = {}) {
     for (let i = 0; i < n; i++) bytes.set(one, i * one.length);
     if (opt.mode === 'usb') await usbSend(bytes, ask);
     else if (opt.mode === 'serial') await serialSend(bytes, ask);
+    else if (opt.mode === 'ble') { toast('กำลังส่งไปเครื่องพิมพ์ทาง Bluetooth…', 'info', 2000); await bleSend(bytes, ask); }
     else if (opt.mode === 'rawbt') rawbtSend(bytes);
     toast('ส่งไปเครื่องพิมพ์แล้ว' + (n > 1 ? ` (${n} ใบ)` : ''));
   } catch (e) {
     if (e && e.name === 'NotFoundError') toast('ยังไม่ได้เลือกเครื่องพิมพ์', 'warning');
     else toast('พิมพ์ไม่สำเร็จ: ' + (e && e.message || e), 'error', 6000);
-    usbDev = null;
+    usbDev = null; bleChar = null;
   } finally { printing = false; }
 }
 
@@ -288,11 +333,13 @@ function testReceipt() {
 /* ---------- หน้าตั้งค่าเครื่องพิมพ์ (แท็บในหน้าผู้ดูแลระบบ) ---------- */
 function printerPanel() {
   const p = prn();
-  const status = p.mode === 'usb' ? (usbDev && usbDev.opened ? `เชื่อมต่อแล้ว: ${esc(usbDev.productName || p.usbName || 'USB')}` : p.usbName ? `เคยเชื่อมต่อ: ${esc(p.usbName)}` : 'ยังไม่ได้เชื่อมต่อ')
+  const status = p.mode === 'ble' ? (bleChar ? `เชื่อมต่อแล้ว: ${esc(bleDev.name || p.bleName || 'Bluetooth')}` : p.bleName ? `เคยเชื่อมต่อ: ${esc(p.bleName)} (กดเชื่อมต่ออีกครั้งหลังเปิดแอปใหม่)` : 'ยังไม่ได้เชื่อมต่อ')
+    : p.mode === 'usb' ? (usbDev && usbDev.opened ? `เชื่อมต่อแล้ว: ${esc(usbDev.productName || p.usbName || 'USB')}` : p.usbName ? `เคยเชื่อมต่อ: ${esc(p.usbName)}` : 'ยังไม่ได้เชื่อมต่อ')
     : p.mode === 'serial' ? (serialPort ? 'เชื่อมต่อพอร์ตแล้ว' : 'ยังไม่ได้เลือกพอร์ต') : '';
   const help = {
+    ble: `<ol><li>เปิดเว็บนี้ด้วย <b>Chrome</b> และเปิด Bluetooth + ตำแหน่ง (Location) ของเครื่อง</li><li>เปิดเครื่องพิมพ์ <b>ไม่ต้องจับคู่ในการตั้งค่า Bluetooth ของมือถือ</b></li><li>กด “เชื่อมต่อเครื่องพิมพ์” แล้วเลือกชื่อเครื่องพิมพ์ (เช่น Printer001 / XP-N160II)</li><li>ถ้าไม่เจอเครื่องพิมพ์ในรายการ หรือขึ้นว่าไม่รองรับ แปลว่ารุ่นนี้ใช้ Bluetooth แบบเดิม (ไม่ใช่ LE) ให้ใช้ “USB โดยตรง” ด้วยสาย OTG แทน (ไม่ต้องติดตั้งแอปเหมือนกัน)</li></ol>`,
     browser: `<ol><li>ติดตั้งไดรเวอร์ Xprinter (XP-N160II) บนคอมพิวเตอร์</li><li>ตั้งขนาดกระดาษเป็น 80mm (72mm × Receipt) ในไดรเวอร์</li><li>กด “พิมพ์” แล้วเลือกเครื่องพิมพ์ Xprinter · ตั้ง ระยะขอบ = ไม่มี, สเกล = 100%</li><li>แนะนำให้ตั้งเป็นเครื่องพิมพ์เริ่มต้น</li></ol>`,
-    usb: `<ol><li>ใช้ Chrome หรือ Edge · ต่อสาย USB (แท็บเล็ต/มือถือ Android ใช้สาย OTG)</li><li>กด “เชื่อมต่อเครื่องพิมพ์” แล้วเลือก XP-N160II / USB Printer (ทำครั้งเดียว)</li><li>บน Windows ถ้าเชื่อมไม่ได้ ให้ใช้วิธี “หน้าต่างพิมพ์ของเบราว์เซอร์” แทน (หรือเปลี่ยนไดรเวอร์เป็น WinUSB ด้วยโปรแกรม Zadig)</li></ol>`,
+    usb: `<ol><li>ใช้ Chrome หรือ Edge · ต่อสาย USB (มือถือ/แท็บเล็ต Android เช่น Xiaomi ใช้สาย/หัวแปลง USB OTG ต่อเข้าช่อง Type-C)</li><li>กด “เชื่อมต่อเครื่องพิมพ์” แล้วเลือก XP-N160II / USB Printer (ทำครั้งเดียว)</li><li>บน Windows ถ้าเชื่อมไม่ได้ ให้ใช้วิธี “หน้าต่างพิมพ์ของเบราว์เซอร์” แทน (หรือเปลี่ยนไดรเวอร์เป็น WinUSB ด้วยโปรแกรม Zadig)</li></ol>`,
     rawbt: `<ol><li>เปิดเว็บนี้ด้วย <b>Chrome</b> (เบราว์เซอร์ในเครื่อง เช่น Mi Browser อาจเปิดแอป RawBT ไม่ได้)</li><li>ติดตั้งแอป <a href="https://play.google.com/store/apps/details?id=ru.a402d.rawbtprinter" target="_blank" rel="noopener">RawBT</a> จาก Play Store</li><li>ในแอป RawBT เลือกเครื่องพิมพ์ (Bluetooth จับคู่ก่อน / USB / LAN ใส่ IP) และตั้งกระดาษ 80mm</li><li>กลับมากด “พิมพ์ทดสอบ” — ครั้งแรกให้กดอนุญาตเปิดแอป RawBT</li><li><b>Xiaomi / Redmi / POCO:</b> ไปที่ ตั้งค่า → แอป → RawBT → เปิด “เริ่มอัตโนมัติ (Autostart)” และ ประหยัดแบตเตอรี่ = “ไม่จำกัด” และอนุญาต “แสดงหน้าต่างป๊อปอัปขณะทำงานในเบื้องหลัง” ไม่เช่นนั้นระบบอาจปิด RawBT จนพิมพ์ไม่ออก</li></ol>`,
     serial: `<ol><li>จับคู่ Bluetooth ของเครื่องพิมพ์กับคอมพิวเตอร์ (รหัสมักเป็น 0000 หรือ 1234)</li><li>ใช้ Chrome/Edge กด “เชื่อมต่อเครื่องพิมพ์” แล้วเลือกพอร์ต COM ของเครื่องพิมพ์</li></ol>`,
     image: `<ol><li>กดพิมพ์ ระบบจะสร้างรูปใบเสร็จขนาดพอดีกระดาษ 80mm</li><li>แชร์รูปไปที่แอปพิมพ์ของ Xprinter (เช่น แอปที่มากับเครื่อง หรือ “Thermer”) แล้วสั่งพิมพ์</li></ol>`
@@ -302,10 +349,10 @@ function printerPanel() {
       <div class="prn-model">${icon('printer')}<div><b>Xprinter XP-N160II</b><small>เครื่องพิมพ์ความร้อน 80mm · 203dpi · ESC/POS · มีใบตัดกระดาษอัตโนมัติ</small></div></div>
       <h3 class="mini-h">วิธีพิมพ์บนเครื่องนี้</h3>
       <div class="prn-modes">${PRN_MODES.map(m => `<button class="prn-mode ${p.mode === m.k ? 'on' : ''}" data-act="prnMode" data-k="${m.k}">
-        <span class="over-ic">${icon(m.ic)}</span><span class="over-txt"><b>${m.l}</b><small>${m.d}</small></span>
-        ${prnSupport(m.k) ? (m.k === recommendMode() ? badge('แนะนำ', 'success') : '') : badge('ไม่รองรับบนเครื่องนี้', 'neutral')}<span class="radio"></span></button>`).join('')}</div>
+        <span class="over-ic">${icon(m.ic)}</span><span class="over-txt"><b>${m.l}</b><small>${m.d}</small>
+        ${prnSupport(m.k) ? (m.k === recommendMode() ? badge('แนะนำสำหรับเครื่องนี้', 'success') : m.free ? badge('ไม่ต้องติดตั้งแอป', 'primary') : '') : badge('ไม่รองรับบนเครื่องนี้', 'neutral')}</span><span class="radio"></span></button>`).join('')}</div>
       <div class="prn-help">${icon('info')}<div>${help}</div></div>
-      ${p.mode === 'usb' || p.mode === 'serial' ? `<div class="prn-status"><span class="dot ${(p.mode === 'usb' ? usbDev && usbDev.opened : serialPort) ? 'on' : ''}"></span><span>${status}</span>
+      ${['usb', 'serial', 'ble'].includes(p.mode) ? `<div class="prn-status"><span class="dot ${(p.mode === 'usb' ? usbDev && usbDev.opened : p.mode === 'ble' ? bleChar : serialPort) ? 'on' : ''}"></span><span>${status}</span>
         <button class="btn btn-soft btn-sm" data-act="prnConnect">${icon('zap')}เชื่อมต่อเครื่องพิมพ์</button></div>` : ''}
       <div class="prn-actions"><button class="btn btn-primary" data-act="prnTest">${icon('printer')}พิมพ์ทดสอบ</button></div>
     </section>
@@ -337,7 +384,7 @@ const prnToggle = (k, title, sub) => `<label class="opt-row"><span class="opt-tx
 
 function recommendMode() {
   if (isIOS()) return 'image';
-  if (isAndroid()) return 'rawbt';
+  if (isAndroid()) return 'bluetooth' in navigator ? 'ble' : 'usb';
   return 'browser';
 }
 
@@ -357,7 +404,9 @@ ACT.prnSet = el => {
 };
 ACT.prnConnect = async () => {
   try {
-    if (prn().mode === 'usb') { usbDev = null; await usbConnect(true); }
+    const m = prn().mode;
+    if (m === 'usb') { usbDev = null; await usbConnect(true); }
+    else if (m === 'ble') { if (bleDev && bleDev.gatt.connected) bleDev.gatt.disconnect(); bleDev = null; bleChar = null; await bleConnect(true); }
     else { serialPort = null; await serialConnect(true); }
     toast('เชื่อมต่อเครื่องพิมพ์แล้ว'); render();
   } catch (e) { if (e.name !== 'NotFoundError') toast(e.message || String(e), 'error', 6000); }
