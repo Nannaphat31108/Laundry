@@ -10,6 +10,7 @@ const TABS = [
   { k: 'pkg', l: 'แพ็คเกจ', ic: 'package', g: 'จัดการร้าน' },
   { k: 'rc', l: 'ใบเสร็จ', ic: 'receipt', g: 'จัดการร้าน' },
   { k: 'acct', l: 'บัญชี', ic: 'wallet', g: 'การเงิน & ระบบ' },
+  { k: 'prn', l: 'เครื่องพิมพ์', ic: 'printer', g: 'การเงิน & ระบบ' },
   { k: 'set', l: 'ผู้ดูแลระบบ', short: 'แอดมิน', ic: 'shield', g: 'การเงิน & ระบบ' }
 ];
 const MOBILE_TABS = ['home', 'cust', 'order', 'rc', 'more'];
@@ -56,6 +57,7 @@ function renderTopbar() {
     <a class="top-brand" href="#/home">${brandMark('sm')}<b>${esc(db.shop.name)}</b></a>
     <div class="crumbs"><span>${esc(db.shop.name)}</span>${icon('chevronRight')}<b>${t.l}</b></div>
     <div class="top-right">
+      <a class="admin-chip prn-chip" href="#/prn" title="เครื่องพิมพ์">${icon('printer')}<span>เครื่องพิมพ์</span></a>
       ${isAdmin()
         ? `<button class="admin-chip on" data-act="adminLock" title="ล็อกโหมดแอดมิน">${icon('shield')}<span>แอดมิน</span>${icon('lock')}</button>`
         : `<button class="admin-chip" data-act="adminLogin" title="เข้าสู่โหมดแอดมิน">${icon('lock')}<span>แอดมิน</span></button>`}
@@ -65,7 +67,7 @@ function renderTopbar() {
 }
 
 function renderBottomNav() {
-  const more = ['pkg', 'acct', 'set'].includes(state.route);
+  const more = ['pkg', 'acct', 'prn', 'set'].includes(state.route);
   $('#bottom-nav').innerHTML = MOBILE_TABS.map(k => {
     if (k === 'more') return `<button class="bn-item ${more ? 'on' : ''}" data-act="moreMenu">${icon('grid')}<span>เพิ่มเติม</span></button>`;
     const t = TABS.find(x => x.k === k);

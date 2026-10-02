@@ -417,3 +417,9 @@ ACT.prnTest = () => printReceipt(testReceipt());
 if ('usb' in navigator) {
   navigator.usb.addEventListener('disconnect', e => { if (usbDev && e.device === usbDev) { usbDev = null; toast('เครื่องพิมพ์ USB ถูกถอดออก', 'warning'); } });
 }
+
+/* หน้าเครื่องพิมพ์: ทุกคนเปิดได้ (ไม่ต้องใช้รหัสแอดมิน) เพราะเป็นการตั้งค่าของเครื่องนี้ */
+V.prn = {
+  render: () => `${pageHead('เครื่องพิมพ์', 'เชื่อมต่อและตั้งค่าเครื่องพิมพ์ใบเสร็จของเครื่องนี้')}<div class="settings">${printerPanel()}</div>`,
+  mount: () => prnPreview()
+};

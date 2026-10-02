@@ -1231,3 +1231,4 @@ label.opt-row { cursor: pointer; }
   .prn-modes { grid-template-columns: minmax(0, 1fr); }
 }
 .prn-mode .over-txt .badge { align-self: flex-start; margin-top: 6px; }
+@media (max-width: 860px) { body.modal-open .toasts { bottom: auto; top: calc(12px + env(safe-area-inset-top)); } }

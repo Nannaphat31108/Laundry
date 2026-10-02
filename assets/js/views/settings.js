@@ -10,7 +10,6 @@ const ADM_TABS = [
   ['price', 'ราคาต่อชิ้น', 'shirt'],
   ['pkg', 'แพ็คเกจ', 'package'],
   ['list', 'หมวดหมู่', 'tag'],
-  ['printer', 'เครื่องพิมพ์', 'printer'],
   ['rule', 'กฎระบบ', 'sliders'],
   ['data', 'ข้อมูล & รหัส', 'shield']
 ];
@@ -185,10 +184,8 @@ ADM.data = () => {
     </section>`;
 };
 
-ADM.printer = () => printerPanel();
 
 V.set = {
-  mount() { if (isAdmin() && state.admTab === 'printer') prnPreview(); },
   render() {
     if (!isAdmin()) {
       return `${pageHead('ผู้ดูแลระบบ', 'ส่วนสำหรับเจ้าของร้าน')}
