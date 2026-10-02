@@ -41,7 +41,7 @@ function followItem(c) {
       <div class="follow-top"><b>${esc(c.name)}</b>${badge(st.label, st.tone)}</div>
       <div class="follow-sub">${esc(c.pkgName)} · ${dl < 0 ? 'หมดอายุแล้ว ' + Math.abs(dl) + ' วัน' : dl === 0 ? 'หมดอายุวันนี้' : 'หมดอายุใน ' + dl + ' วัน'} (${dTh(c.exp)})</div>
       <div class="meter ${st.tone}"><span style="width:${pct}%"></span></div>
-      <div class="follow-meta"><span>เหลือ <b>${c.left}</b> / ${total} ชิ้น</span></div>
+      <div class="follow-meta"><span>${c.left < 0 ? `<b class="owed">ค้าง ${-c.left} ชิ้น</b> · หักจากแพ็คเกจถัดไป` : `เหลือ <b>${c.left}</b> / ${total} ชิ้น`}</span></div>
     </div>
     <button class="btn btn-soft btn-sm" data-act="buyPkg" data-id="${c.id}">${icon('refresh')}ต่อแพ็คเกจ</button>
   </div>`;

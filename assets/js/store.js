@@ -78,11 +78,16 @@ const avatarTone = id => { let h = 0; for (const c of String(id)) h = (h * 31 + 
 const cust = id => db.customers.find(c => c.id == id);
 const pkgById = id => db.packages.find(p => p.id == id);
 const active = c => !!(c && c.pkgId && c.left > 0 && c.exp >= today());
+/** ยอดชิ้นที่ใช้เกินแพ็คเกจ รอหักจากแพ็คเกจถัดไป */
+const owedOf = c => (c && c.pkgId && c.left < 0 ? -c.left : 0);
+/** แสดงยอดคงเหลือ: ติดลบ = ค้างหักแพ็คเกจถัดไป */
+const pcs = n => (n < 0 ? `ค้าง ${-n} ชิ้น` : `${n} ชิ้น`);
 const needsFollow = c => c.pkgId && (c.left <= 5 || c.exp <= addDays(3));
 
 /** สถานะแพ็คเกจของลูกค้า สำหรับป้ายสถานะ */
 function pkgStatus(c) {
   if (!c.pkgId) return { key: 'none', label: 'ไม่มีแพ็คเกจ', tone: 'neutral' };
+  if (c.left < 0) return { key: 'owed', label: 'ค้าง ' + (-c.left) + ' ชิ้น', tone: 'danger' };
   if (c.exp < today()) return { key: 'expired', label: 'หมดอายุ', tone: 'danger' };
   if (c.left <= 0) return { key: 'empty', label: 'ใช้ครบแล้ว', tone: 'danger' };
   if (c.left <= 5 || c.exp <= addDays(3)) return { key: 'low', label: 'ใกล้หมด', tone: 'warning' };
@@ -127,6 +132,6 @@ const ACT = {};  // actions: data-act / data-input / data-change → ACT[name](e
 const state = {
   route: 'home',
   from: today().slice(0, 8) + '01', to: today(),
-  cart: {}, sel: '', renew: false,
+  cart: {}, sel: '', over: 'carry',
   q: '', custFilter: 'all', rcQ: '', ledFilter: 'all', ledLimit: 50, rcLimit: 50
 };

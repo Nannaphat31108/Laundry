@@ -6,35 +6,47 @@
 const pieceGarments = () => db.garments.filter(g => g.unit != 'กก.');
 const weightGarments = () => db.garments.filter(g => g.unit == 'กก.');
 
-/** คำนวณยอด: ใช้แพ็คเกจก่อน ส่วนเกินคิดเงินสด หรือต่อแพ็คเกจใหม่อัตโนมัติ (ตรรกะเดียวกับระบบเดิม) */
+/**
+ * คำนวณยอด: ใช้แพ็คเกจก่อน ส่วนที่เกินจัดการได้ 3 แบบ (state.over)
+ *  - carry: ทบเป็นยอดค้าง ไปหักจากแพ็คเกจถัดไป (ค่าเริ่มต้น)
+ *  - renew: ต่อแพ็คเกจใหม่ทันที แล้วหักส่วนเกิน (รวมยอดค้างเดิม)
+ *  - cash:  คิดเงินสดตามราคาต่อชิ้น
+ */
 function calc() {
-  const { cart, renew } = state, c = cust(state.sel), pieceG = pieceGarments(), wtG = weightGarments();
+  const { cart } = state, c = cust(state.sel), pieceG = pieceGarments(), wtG = weightGarments();
+  const hasPkg = !!(c && c.pkgId);
   const pcsTot = pieceG.reduce((a, g) => a + (cart[g.id] || 0), 0);
   const kgTot = wtG.reduce((a, g) => a + (cart[g.id] || 0), 0);
   const avail = c && active(c) ? c.left : 0, use = Math.min(avail, pcsTot), overflow = pcsTot - use;
+  const owed = owedOf(c);
+  // ยอดตั้งต้น: แพ็คเกจหมดอายุแล้ว ยอดบวกที่เหลือใช้ไม่ได้ แต่ยอดค้างยังอยู่
+  const base = hasPkg ? (active(c) ? c.left : Math.min(0, c.left)) : 0;
+  const mode = hasPkg && overflow > 0 ? state.over : 'cash';
   let renewInfo = null;
-  if (renew && overflow > 0 && c && c.pkgId) {
+  if (mode === 'renew') {
     const pkg = pkgById(c.pkgId);
     if (pkg && pkg.pieces > 0) {
-      const cycles = Math.ceil(overflow / pkg.pieces);
-      renewInfo = { pkg, cycles, fee: cycles * pkg.price, newLeft: cycles * pkg.pieces - overflow, newExp: addDays(pkg.days) };
+      const need = overflow + owed, cycles = Math.max(1, Math.ceil(need / pkg.pieces));
+      renewInfo = { pkg, cycles, need, fee: cycles * pkg.price, newLeft: cycles * pkg.pieces - need, newExp: addDays(pkg.days) };
     }
   }
+  const carry = mode === 'carry' ? overflow : 0;
+  const free = !!renewInfo || carry > 0;
   let bud = use;
   const pieceLines = [];
   pieceG.forEach(g => {
     const q = cart[g.id] || 0; if (!q) return;
     const u = Math.min(bud, q); bud -= u;
-    const pay = renewInfo ? 0 : (q - u);
-    pieceLines.push({ g, q, used: u, pay, amt: pay * g.price });
+    const pay = free ? 0 : (q - u);
+    pieceLines.push({ g, q, used: u, over: free ? q - u : 0, pay, amt: pay * g.price });
   });
-  const wtLines = wtG.filter(g => cart[g.id]).map(g => ({ g, q: cart[g.id], used: 0, pay: cart[g.id], amt: cart[g.id] * g.price }));
+  const wtLines = wtG.filter(g => cart[g.id]).map(g => ({ g, q: cart[g.id], used: 0, over: 0, pay: cart[g.id], amt: cart[g.id] * g.price }));
   const lines = pieceLines.concat(wtLines), itemPay = lines.reduce((a, l) => a + l.amt, 0);
   const pay = Math.round((itemPay + (renewInfo ? renewInfo.fee : 0)) * 100) / 100;
   return {
-    lines, use, overflow, renewInfo, pay, pcsTot, kgTot: Math.round(kgTot * 100) / 100,
-    before: c && c.pkgId ? avail : null,
-    left: renewInfo ? renewInfo.newLeft : (c && active(c) ? avail - use : null),
+    lines, use, overflow, owed, mode, renewInfo, carry, pay, pcsTot, kgTot: Math.round(kgTot * 100) / 100,
+    hasPkg, before: hasPkg ? c.left : null,
+    left: renewInfo ? renewInfo.newLeft : (hasPkg ? base - use - carry : null),
     any: lines.some(l => l.q > 0)
   };
 }
@@ -71,48 +83,66 @@ function customerCard() {
       <span class="cust-pick-main"><b>ลูกค้าทั่วไป</b><small>จ่ายรายวัน · คิดราคาตามรายการ</small></span>
       <span class="cust-pick-cta">${icon('search')}เลือกลูกค้า</span></button>`;
   }
-  const st = pkgStatus(c), p = pkgById(c.pkgId), total = p ? p.pieces : Math.max(c.left, 1);
+  const st = pkgStatus(c), p = pkgById(c.pkgId), total = p ? p.pieces : Math.max(c.left, 1), owed = owedOf(c);
+  const strip = c.pkgId ? `<div class="pkg-strip ${active(c) ? '' : 'off'}">
+      <div class="pkg-strip-main">
+        <div class="pkg-strip-top">${badge(esc(c.pkgName), active(c) ? 'primary' : 'neutral', 'package')}
+          <span>${owed ? `<b class="owed">ค้าง ${owed}</b> ชิ้น` : `คงเหลือ <b>${active(c) ? c.left : 0}</b> ชิ้น`} · ${c.exp < today() ? 'หมดอายุ ' : 'ถึง '}${dTh(c.exp)}</span></div>
+        <div class="meter ${st.tone}"><span style="width:${Math.max(0, Math.min(100, c.left / total * 100))}%"></span></div>
+        ${owed ? `<p class="strip-note">${icon('info')}ใช้เกินแพ็คเกจรอบก่อน ${owed} ชิ้น — จะหักอัตโนมัติเมื่อซื้อ/ต่อแพ็คเกจใหม่</p>`
+          : !active(c) ? `<p class="strip-note">${icon('alert')}แพ็คเกจ${c.exp < today() ? 'หมดอายุแล้ว' : 'ใช้ครบแล้ว'} — ชิ้นที่ส่งมาเลือกทบไปแพ็คเกจถัดไปหรือคิดเงินสดได้</p>` : ''}
+      </div>
+      ${active(c) ? '' : `<button class="btn btn-sm btn-primary" data-act="buyPkg" data-id="${c.id}">${icon('refresh')}ต่อแพ็คเกจ</button>`}
+    </div>`
+    : `<div class="alert alert-info slim">${icon('info')}<div>ลูกค้ายังไม่มีแพ็คเกจ — คิดราคาตามรายการ</div>
+         <button class="btn btn-sm btn-soft" data-act="buyPkg" data-id="${c.id}">${icon('package')}ซื้อแพ็คเกจ</button></div>`;
   return `<div class="cust-pick-wrap">
     <button class="cust-pick" data-act="pickCust">
       ${avatar(c)}
       <span class="cust-pick-main"><b>${esc(c.name)}</b><small>${[c.phone, c.line && 'LINE: ' + c.line].filter(Boolean).map(esc).join(' · ') || 'ไม่มีข้อมูลติดต่อ'}</small></span>
       <span class="cust-pick-cta">${icon('refresh')}เปลี่ยน</span>
     </button>
-    ${active(c) ? `<div class="pkg-strip">
-      <div class="pkg-strip-main">
-        <div class="pkg-strip-top">${badge(esc(c.pkgName), 'primary', 'package')}<span>คงเหลือ <b>${c.left}</b> ชิ้น · ถึง ${dTh(c.exp)}</span></div>
-        <div class="meter ${st.tone}"><span style="width:${Math.min(100, c.left / total * 100)}%"></span></div>
-      </div></div>`
-      : `<div class="alert alert-danger slim">${icon('alert')}<div>ไม่มีแพ็คเกจที่ใช้งานได้ — คิดราคาตามรายการ</div>
-         <button class="btn btn-sm btn-soft" data-act="buyPkg" data-id="${c.id}">${icon('package')}ซื้อแพ็คเกจ</button></div>`}
+    ${strip}
     <button class="icon-btn cust-clear" data-act="selCust" data-id="" title="เปลี่ยนเป็นลูกค้าทั่วไป" aria-label="ล้างลูกค้า">${icon('x')}</button>
   </div>`;
 }
 
 function summaryHTML() {
   const c = cust(state.sel), cl = calc();
-  const renewBox = c && active(c) ? `
-    <label class="switch-row">
-      <span class="switch"><input type="checkbox" ${state.renew ? 'checked' : ''} data-change="toggleRenew"><i></i></span>
-      <span>ถ้าชิ้นเกินแพ็คเกจ ให้<b>ต่อแพ็คเกจใหม่ทันที</b> (แทนคิดเงินสดส่วนเกิน)</span>
-    </label>
-    ${cl.renewInfo ? `<div class="alert alert-warning slim">${icon('refresh')}<div>เกินแพ็คเกจเดิม <b>${cl.overflow}</b> ชิ้น → ต่อแพ็คเกจ <b>${esc(cl.renewInfo.pkg.name)}</b>${cl.renewInfo.cycles > 1 ? ' x' + cl.renewInfo.cycles : ''} ราคา <b>${fm(cl.renewInfo.fee)}</b> บาท<br><small>เหลือใหม่ ${cl.renewInfo.newLeft} ชิ้น ถึง ${dTh(cl.renewInfo.newExp)}</small></div></div>` : ''}` : '';
+  let overBox = '';
+  if (cl.hasPkg && cl.overflow > 0) {
+    const p = pkgById(c.pkgId);
+    const cashAmt = cl.lines.reduce((a, l) => a + (l.g.unit != 'กก.' ? (l.q - l.used) * l.g.price : 0), 0);
+    const opts = [
+      ['carry', 'ทบไปหักแพ็คเกจถัดไป', `ค้าง ${cl.overflow + cl.owed} ชิ้น · ไม่เก็บเงินตอนนี้`, 'layers'],
+      ['renew', 'ต่อแพ็คเกจใหม่ทันที', p && p.pieces > 0 ? `${esc(p.name)} ${money(p.price * Math.max(1, Math.ceil((cl.overflow + cl.owed) / p.pieces)))}` : 'ไม่พบแพ็คเกจเดิม', 'refresh'],
+      ['cash', 'คิดเงินสดส่วนเกิน', money(cashAmt), 'coins']
+    ];
+    overBox = `<div class="over-box">
+      <div class="over-head">${icon('alert')}<span>เกินแพ็คเกจ <b>${cl.overflow}</b> ชิ้น${cl.owed ? ` (มียอดค้างเดิม ${cl.owed} ชิ้น)` : ''} — เลือกวิธีจัดการ</span></div>
+      <div class="over-opts" role="radiogroup">${opts.map(([k, t, d, ic]) => `<button class="over-opt ${state.over === k ? 'on' : ''}" data-act="setOver" data-k="${k}" role="radio" aria-checked="${state.over === k}" ${k === 'renew' && !(p && p.pieces > 0) ? 'disabled' : ''}>
+        <span class="over-ic">${icon(ic)}</span><span class="over-txt"><b>${t}</b><small>${d}</small></span><span class="radio"></span></button>`).join('')}</div>
+      ${cl.renewInfo ? `<p class="over-note">ต่อแพ็คเกจ${cl.renewInfo.cycles > 1 ? ' x' + cl.renewInfo.cycles : ''} แล้วหัก ${cl.renewInfo.need} ชิ้น → เหลือใหม่ <b>${cl.renewInfo.newLeft}</b> ชิ้น ถึง ${dTh(cl.renewInfo.newExp)}</p>`
+        : cl.mode === 'carry' ? `<p class="over-note">ยอดค้าง <b>${-cl.left}</b> ชิ้น จะหักจากแพ็คเกจถัดไปอัตโนมัติ และพิมพ์แจ้งในใบเสร็จ</p>` : ''}
+    </div>`;
+  }
 
   const lines = cl.lines.map(l => `
     <div class="sum-line">
       <div class="sum-line-main"><b>${esc(l.g.name)}</b><small>${fm(l.q)} ${l.g.unit} × ${fm(l.g.price)}</small>
-        ${l.used ? `<span class="mini-tag">ใช้แพ็คเกจ ${l.used}${l.g.unit}${l.pay ? ` · จ่าย ${l.pay}${l.g.unit}` : ''}</span>` : ''}</div>
-      <span class="sum-line-amt">${l.amt ? fm(l.amt) : l.used || cl.renewInfo ? '<span class="free">แพ็คเกจ</span>' : '0'}</span>
+        ${l.used ? `<span class="mini-tag">ใช้แพ็คเกจ ${l.used}${l.g.unit}${l.pay ? ` · จ่าย ${l.pay}${l.g.unit}` : ''}</span>` : ''}${l.over ? `<span class="mini-tag warn">เกิน ${l.over}${l.g.unit} · ${cl.mode === 'carry' ? 'ทบแพ็คเกจถัดไป' : 'หักแพ็คเกจใหม่'}</span>` : ''}</div>
+      <span class="sum-line-amt">${l.amt ? fm(l.amt) : l.used || l.over ? '<span class="free">แพ็คเกจ</span>' : '0'}</span>
     </div>`).join('');
 
   return `
     <div class="sum-head"><h2>${icon('receipt')}สรุปรายการ</h2>${cl.any ? `<button class="btn btn-ghost btn-sm" data-act="clearCart">${icon('trash')}ล้าง</button>` : ''}</div>
-    ${renewBox}
+    ${overBox}
     <div class="sum-lines">${cl.any ? lines + (cl.renewInfo ? `<div class="sum-line"><div class="sum-line-main"><b>${esc(cl.renewInfo.pkg.name)}</b><small>ต่อแพ็คเกจใหม่อัตโนมัติ${cl.renewInfo.cycles > 1 ? ' x' + cl.renewInfo.cycles : ''}</small></div><span class="sum-line-amt">${fm(cl.renewInfo.fee)}</span></div>` : '')
       : `<div class="sum-empty">${icon('shirt')}<p>แตะที่รายการผ้าเพื่อเพิ่มลงบิล</p></div>`}</div>
     <div class="sum-foot">
       <div class="sum-row"><span>จำนวน</span><b>${cl.pcsTot} ชิ้น${cl.kgTot ? ' + ' + fm(cl.kgTot) + ' กก.' : ''}</b></div>
-      ${cl.use ? `<div class="sum-row"><span>ใช้แพ็คเกจ</span><b>${cl.use} ชิ้น <small>(เหลือ ${cl.left})</small></b></div>` : ''}
+      ${cl.use ? `<div class="sum-row"><span>ใช้แพ็คเกจ</span><b>${cl.use} ชิ้น</b></div>` : ''}
+      ${cl.hasPkg && cl.any ? `<div class="sum-row"><span>คงเหลือหลังบิลนี้</span><b class="${cl.left < 0 ? 'owed' : ''}">${pcs(cl.left)}</b></div>` : ''}
       <div class="sum-total"><span>ต้องชำระ</span><b>${fm(cl.pay)}<small> บาท</small></b></div>
       <button class="btn btn-primary btn-lg btn-block" data-act="checkout" ${cl.any ? '' : 'disabled'}>${icon('printer')}บันทึก + พิมพ์ใบเสร็จ</button>
     </div>`;
@@ -120,7 +150,7 @@ function summaryHTML() {
 
 function barHTML() {
   const cl = calc();
-  return `<div class="pos-bar-info"><small>${cl.pcsTot} ชิ้น${cl.kgTot ? ' + ' + fm(cl.kgTot) + ' กก.' : ''}${cl.use ? ' · ใช้แพ็คเกจ ' + cl.use : ''}</small><b>${fm(cl.pay)} <small>บาท</small></b></div>
+  return `<div class="pos-bar-info"><small>${cl.pcsTot} ชิ้น${cl.kgTot ? ' + ' + fm(cl.kgTot) + ' กก.' : ''}${cl.use ? ' · ใช้แพ็คเกจ ' + cl.use : ''}${cl.carry ? ' · ทบ ' + cl.carry : ''}</small><b>${fm(cl.pay)} <small>บาท</small></b></div>
     <button class="btn btn-primary" data-act="checkout" ${cl.any ? '' : 'disabled'}>${icon('printer')}บันทึก + พิมพ์</button>`;
 }
 
@@ -130,7 +160,7 @@ function refreshOrder(ids) {
   renderPart('#pos-bar', barHTML());
   const ph = $('#pg-piece-h'); if (ph) ph.innerHTML = pieceHead();
 }
-const pieceHead = () => { const c = cust(state.sel); return `<h2>รายการคิดตามชิ้น</h2>${c && active(c) ? badge('ใช้แพ็คเกจได้', 'success', 'check') : ''}`; };
+const pieceHead = () => { const c = cust(state.sel); return `<h2>รายการคิดตามชิ้น</h2>${c && active(c) ? badge('ใช้แพ็คเกจได้', 'success', 'check') : c && c.pkgId ? badge('ทบไปแพ็คเกจถัดไปได้', 'warning', 'layers') : ''}`; };
 
 V.order = {
   render() {
@@ -174,9 +204,9 @@ ACT.wstep = el => {
   const inp = $(`#t-${id} input`); if (inp) inp.value = v || '';
   refreshOrder([id]);
 };
-ACT.clearCart = () => { state.cart = {}; state.renew = false; render(); };
-ACT.toggleRenew = el => { state.renew = el.checked; refreshOrder(); };
-ACT.selCust = el => { state.sel = el.dataset.id; state.renew = false; if (state.route === 'order') render(); else go('order'); };
+ACT.clearCart = () => { state.cart = {}; state.over = 'carry'; render(); };
+ACT.setOver = el => { state.over = el.dataset.k; refreshOrder(); };
+ACT.selCust = el => { state.sel = el.dataset.id; state.over = 'carry'; if (state.route === 'order') render(); else go('order'); };
 
 document.addEventListener('keydown', e => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.tile[data-act="tileAdd"]')) { e.preventDefault(); ACT.tileAdd(e.target, e); }
@@ -206,31 +236,36 @@ ACT.pickCust = () => {
   inp.addEventListener('input', () => { m.q('.pick-list').innerHTML = listHTML(inp.value); });
   m.q('.pick-list').addEventListener('click', e => {
     const b = e.target.closest('[data-pick]'); if (!b) return;
-    state.sel = b.dataset.pick; state.renew = false; m.close(); render();
+    state.sel = b.dataset.pick; state.over = 'carry'; m.close(); render();
   });
-  m.q('[data-new]').addEventListener('click', () => { m.close(); editCust(null, c => { state.sel = c.id; state.renew = false; render(); }); });
+  m.q('[data-new]').addEventListener('click', () => { m.close(); editCust(null, c => { state.sel = c.id; state.over = 'carry'; render(); }); });
 };
 
 ACT.checkout = () => {
   const cl = calc();
   if (!cl.any) return toast('กรุณาเลือกจำนวนผ้าก่อน', 'error');
   const c = cust(state.sel);
-  const lines = cl.lines.map(l => ({ t: l.g.name, q: l.q, unit: l.g.unit, price: l.g.price, a: l.pay * l.g.price, note: l.used ? `ใช้แพ็คเกจ ${l.used}${l.g.unit}, จ่าย ${l.pay}${l.g.unit}` : '' }));
-  let exp = (c && active(c)) || cl.use ? c.exp : '';
+  const overTxt = cl.mode === 'carry' ? 'ทบแพ็คเกจถัดไป' : 'หักแพ็คเกจใหม่';
+  const lines = cl.lines.map(l => ({
+    t: l.g.name, q: l.q, unit: l.g.unit, price: l.g.price, a: l.pay * l.g.price,
+    note: [l.used ? `ใช้แพ็คเกจ ${l.used}${l.g.unit}` : '', l.over ? `เกิน ${l.over}${l.g.unit} (${overTxt})` : '', l.used && l.pay ? `จ่าย ${l.pay}${l.g.unit}` : ''].filter(Boolean).join(', ')
+  }));
+  let exp = cl.hasPkg ? c.exp : '';
   if (cl.renewInfo) {
     lines.push({ t: cl.renewInfo.pkg.name + ' (ต่อแพ็คเกจใหม่อัตโนมัติ' + (cl.renewInfo.cycles > 1 ? ' x' + cl.renewInfo.cycles : '') + ')', q: '', a: cl.renewInfo.fee });
     c.left = cl.renewInfo.newLeft; c.exp = cl.renewInfo.newExp; exp = c.exp;
-  } else if (c && cl.use) { c.left = cl.left; }
+  } else if (cl.hasPkg && (cl.use || cl.carry)) { c.left = cl.left; }
   const r = mkRc({
     kind: 'order', name: c ? c.name : 'ลูกค้าทั่วไป', phone: c ? c.phone : '', lines, total: cl.pay,
-    left: cl.renewInfo ? cl.renewInfo.newLeft : cl.left, before: cl.before, used: cl.use, overflow: cl.overflow,
+    left: cl.hasPkg ? (cl.renewInfo ? cl.renewInfo.newLeft : cl.left) : null,
+    before: cl.before, used: cl.use, overflow: cl.overflow, carried: cl.carry, owedBefore: cl.owed,
     renewed: !!cl.renewInfo, renewFee: cl.renewInfo ? cl.renewInfo.fee : 0, exp
   });
   const svcPay = cl.pay - (cl.renewInfo ? cl.renewInfo.fee : 0);
   if (svcPay > 0) db.ledger.push({ id: uid(), date: r.date, type: 'in', title: 'ซักรีด ' + r.name + ' (' + r.no + ')', cat: 'ค่าบริการซักรีด', amt: svcPay, rc: r.no });
   if (cl.renewInfo) db.ledger.push({ id: uid(), date: r.date, type: 'in', title: 'ต่อแพ็คเกจอัตโนมัติ ' + cl.renewInfo.pkg.name + ' - ' + r.name + ' (' + r.no + ')', cat: 'ค่าแพ็คเกจ', amt: cl.renewInfo.fee, rc: r.no });
   save();
-  state.cart = {}; state.renew = false;
+  state.cart = {}; state.over = 'carry';
   render(); showRc(r);
   toast('บันทึกบิล ' + r.no + ' เรียบร้อย');
 };

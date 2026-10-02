@@ -14,10 +14,17 @@ function receiptHTML(r) {
   let pk = '';
   if (r.left != null) {
     if (r.used != null) {
-      pk = L('ยอดคงเหลือก่อนหน้า', r.before + ' ชิ้น') + L('ใช้จากแพ็คเกจเดิม', r.used + ' ชิ้น') +
+      pk = L('ยอดคงเหลือก่อนหน้า', pcs(r.before)) + L('ใช้จากแพ็คเกจเดิม', r.used + ' ชิ้น') +
         (r.renewed ? L('เกินแพ็คเกจเดิม', r.overflow + ' ชิ้น') + L('ค่าต่อแพ็คเกจใหม่', fm(r.renewFee) + ' บาท') : '') +
-        L(`<b>คงเหลือ${r.renewed ? 'หลังต่อแพ็คเกจ' : ''}</b>`, `<b>${r.left} ชิ้น</b>`);
-    } else pk = L('แพ็คเกจคงเหลือ', `<b>${r.left} ชิ้น</b>`);
+        (r.carried ? L('เกินแพ็คเกจ (ทบไปแพ็คเกจถัดไป)', r.carried + ' ชิ้น') : '') +
+        L(`<b>คงเหลือ${r.renewed ? 'หลังต่อแพ็คเกจ' : ''}</b>`, `<b>${pcs(r.left)}</b>`);
+    } else {
+      pk = (r.pieces ? L('แพ็คเกจใหม่', '+' + r.pieces + ' ชิ้น') : '') +
+        (r.owedBefore ? L('หักยอดเกินจากรอบก่อน', '−' + r.owedBefore + ' ชิ้น') : '') +
+        (r.kept ? L('ทบยอดคงเหลือเดิม', '+' + r.kept + ' ชิ้น') : '') +
+        L('<b>แพ็คเกจคงเหลือ</b>', `<b>${pcs(r.left)}</b>`);
+    }
+    if (r.left < 0) pk += `<div class="rc-note">* ยอดค้าง ${-r.left} ชิ้น จะหักจากแพ็คเกจถัดไป</div>`;
   }
   return `<div class="rc">
     ${r.void ? '<div class="rc-void">*** ใบเสร็จนี้ถูกยกเลิกแล้ว ***</div>' : ''}
@@ -41,6 +48,41 @@ function receiptHTML(r) {
   </div>`;
 }
 
+/** ข้อความสรุปสำหรับแจ้งลูกค้า (LINE / คัดลอก) */
+function rcMessage(r) {
+  const s = db.shop, out = [];
+  out.push(`🧺 ${s.name}`, `ใบเสร็จ ${r.no} · ${dSlash(r.date)} ${r.time || ''}`, `ลูกค้า: ${r.name}`, '');
+  r.lines.forEach(l => out.push(`• ${l.t}${l.q ? ' x' + l.q + (l.unit || '') : ''}${l.a !== '' && l.a != null ? ' = ' + fm(l.a) + ' บาท' : ''}${l.note ? '\n   (' + l.note + ')' : ''}`));
+  out.push('', `💰 ยอดชำระ ${fm(r.total)} บาท`);
+  if (r.left != null) {
+    out.push('', '📦 แพ็คเกจ');
+    if (r.used != null) {
+      out.push(`ยอดก่อนหน้า ${pcs(r.before)}`, `ใช้ครั้งนี้ ${r.used} ชิ้น`);
+      if (r.carried) out.push(`เกินแพ็คเกจ ${r.carried} ชิ้น → ทบไปหักแพ็คเกจถัดไป`);
+      if (r.renewed) out.push(`เกินแพ็คเกจ ${r.overflow} ชิ้น → ต่อแพ็คเกจใหม่ ${fm(r.renewFee)} บาท`);
+    } else {
+      if (r.pieces) out.push(`แพ็คเกจใหม่ +${r.pieces} ชิ้น`);
+      if (r.owedBefore) out.push(`หักยอดเกินจากรอบก่อน −${r.owedBefore} ชิ้น`);
+      if (r.kept) out.push(`ทบยอดคงเหลือเดิม +${r.kept} ชิ้น`);
+    }
+    out.push(r.left < 0 ? `ค้าง ${-r.left} ชิ้น (จะหักจากแพ็คเกจถัดไป)` : `คงเหลือ ${r.left} ชิ้น`);
+    if (r.exp) out.push(`ใช้ได้ถึง ${dSlash(r.exp)}`);
+  }
+  if (r.void) out.unshift('*** ใบเสร็จนี้ถูกยกเลิกแล้ว ***');
+  if (s.foot) out.push('', s.foot);
+  return out.join('\n');
+}
+
+async function copyText(t) {
+  try { await navigator.clipboard.writeText(t); return true; }
+  catch (e) {
+    const ta = document.createElement('textarea'); ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    let ok = false; try { ok = document.execCommand('copy'); } catch (e2) { /* ignore */ }
+    ta.remove(); return ok;
+  }
+}
+
 function showRc(r) {
   if (!r) return toast('ไม่พบใบเสร็จ', 'error');
   const m = openModal({
@@ -50,9 +92,12 @@ function showRc(r) {
     body: `${r.void ? `<div class="alert alert-danger">${icon('ban')}<div><b>ใบเสร็จนี้ถูกยกเลิกแล้ว</b><br><small>ยอดถูกตัดออกจากบัญชีรายรับแล้ว</small></div></div>` : ''}
       <div class="paper"><div class="paper-inner">${receiptHTML(r)}</div></div>`,
     footer: `<button class="btn btn-ghost" data-close>ปิด</button>
-             <button class="btn btn-primary" data-print>${icon('printer')}พิมพ์ใบเสร็จ 80mm</button>`
+             <button class="btn btn-soft" data-copy>${icon('copy')}คัดลอกข้อความ</button>
+             <a class="btn btn-line" href="https://line.me/R/share?text=${encodeURIComponent(rcMessage(r))}" target="_blank" rel="noopener">${icon('message')}แจ้งลูกค้าทาง LINE</a>
+             <button class="btn btn-primary" data-print>${icon('printer')}พิมพ์ 80mm</button>`
   });
   m.q('[data-print]').addEventListener('click', () => printDoc(receiptHTML(r), 'rc'));
+  m.q('[data-copy]').addEventListener('click', async () => toast(await copyText(rcMessage(r)) ? 'คัดลอกข้อความแล้ว วางส่งให้ลูกค้าได้เลย' : 'คัดลอกไม่สำเร็จ', 'info'));
 }
 
 async function voidRc(no) {
