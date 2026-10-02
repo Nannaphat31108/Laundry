@@ -25,7 +25,8 @@ const PRN_MODES = [
 function prn() {
   let p = {};
   try { p = JSON.parse(localStorage.getItem(PRN_KEY)) || {}; } catch (e) { /* ignore */ }
-  return Object.assign({}, PRN_DEF, p);
+  // ยังไม่เคยตั้งค่า: เลือกวิธีที่เหมาะกับเครื่องให้อัตโนมัติ (Android เช่น Xiaomi → RawBT, iPhone/iPad → รูปภาพ)
+  return Object.assign({}, PRN_DEF, { mode: recommendMode() }, p);
 }
 function prnSave(patch) {
   const p = Object.assign(prn(), patch);
@@ -292,7 +293,7 @@ function printerPanel() {
   const help = {
     browser: `<ol><li>ติดตั้งไดรเวอร์ Xprinter (XP-N160II) บนคอมพิวเตอร์</li><li>ตั้งขนาดกระดาษเป็น 80mm (72mm × Receipt) ในไดรเวอร์</li><li>กด “พิมพ์” แล้วเลือกเครื่องพิมพ์ Xprinter · ตั้ง ระยะขอบ = ไม่มี, สเกล = 100%</li><li>แนะนำให้ตั้งเป็นเครื่องพิมพ์เริ่มต้น</li></ol>`,
     usb: `<ol><li>ใช้ Chrome หรือ Edge · ต่อสาย USB (แท็บเล็ต/มือถือ Android ใช้สาย OTG)</li><li>กด “เชื่อมต่อเครื่องพิมพ์” แล้วเลือก XP-N160II / USB Printer (ทำครั้งเดียว)</li><li>บน Windows ถ้าเชื่อมไม่ได้ ให้ใช้วิธี “หน้าต่างพิมพ์ของเบราว์เซอร์” แทน (หรือเปลี่ยนไดรเวอร์เป็น WinUSB ด้วยโปรแกรม Zadig)</li></ol>`,
-    rawbt: `<ol><li>ติดตั้งแอป <a href="https://play.google.com/store/apps/details?id=ru.a402d.rawbtprinter" target="_blank" rel="noopener">RawBT</a> จาก Play Store</li><li>ในแอป RawBT เลือกเครื่องพิมพ์ (Bluetooth จับคู่ก่อน / USB / LAN ใส่ IP) และตั้งกระดาษ 80mm</li><li>กลับมากด “พิมพ์ทดสอบ” — ครั้งแรกให้กดอนุญาตเปิดแอป RawBT</li></ol>`,
+    rawbt: `<ol><li>เปิดเว็บนี้ด้วย <b>Chrome</b> (เบราว์เซอร์ในเครื่อง เช่น Mi Browser อาจเปิดแอป RawBT ไม่ได้)</li><li>ติดตั้งแอป <a href="https://play.google.com/store/apps/details?id=ru.a402d.rawbtprinter" target="_blank" rel="noopener">RawBT</a> จาก Play Store</li><li>ในแอป RawBT เลือกเครื่องพิมพ์ (Bluetooth จับคู่ก่อน / USB / LAN ใส่ IP) และตั้งกระดาษ 80mm</li><li>กลับมากด “พิมพ์ทดสอบ” — ครั้งแรกให้กดอนุญาตเปิดแอป RawBT</li><li><b>Xiaomi / Redmi / POCO:</b> ไปที่ ตั้งค่า → แอป → RawBT → เปิด “เริ่มอัตโนมัติ (Autostart)” และ ประหยัดแบตเตอรี่ = “ไม่จำกัด” และอนุญาต “แสดงหน้าต่างป๊อปอัปขณะทำงานในเบื้องหลัง” ไม่เช่นนั้นระบบอาจปิด RawBT จนพิมพ์ไม่ออก</li></ol>`,
     serial: `<ol><li>จับคู่ Bluetooth ของเครื่องพิมพ์กับคอมพิวเตอร์ (รหัสมักเป็น 0000 หรือ 1234)</li><li>ใช้ Chrome/Edge กด “เชื่อมต่อเครื่องพิมพ์” แล้วเลือกพอร์ต COM ของเครื่องพิมพ์</li></ol>`,
     image: `<ol><li>กดพิมพ์ ระบบจะสร้างรูปใบเสร็จขนาดพอดีกระดาษ 80mm</li><li>แชร์รูปไปที่แอปพิมพ์ของ Xprinter (เช่น แอปที่มากับเครื่อง หรือ “Thermer”) แล้วสั่งพิมพ์</li></ol>`
   }[p.mode];
