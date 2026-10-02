@@ -875,6 +875,11 @@ input[type=search]::-webkit-search-cancel-button { cursor: pointer; }
 .rc-l small { font-size: 12px; color: #444; }
 .rc-total { font-size: 14px; }
 .rc-void { text-align: center; font-weight: 700; color: #c00; margin-bottom: 6px; }
+.rc .b { font-weight: 700; }
+.rc .sz-lg { font-size: 16px; }
+.rc .sz-md { font-size: 14px; }
+.rc .sm { font-size: 12px; color: #444; }
+.rc .sm > span:last-child { color: #000; font-size: 13px; }
 
 /* ---------- report (A4) ---------- */
 .rp { color: #111; font-family: var(--font); font-size: 13.5px; }
@@ -1000,7 +1005,7 @@ input[type=search]::-webkit-search-cancel-button { cursor: pointer; }
   .table-wrap { margin: 0 -18px -18px; }
   .mini-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
-  .tile-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .tile-grid { grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 10px; }
   .tile { padding: 12px; }
   .tile-name { font-size: 15px; }
   .stepper button { width: 38px; height: 38px; }
@@ -1185,4 +1190,43 @@ label.opt-row { cursor: pointer; }
 @media (max-width: 860px) {
   .gar-row { grid-template-columns: 36px minmax(0, 1fr) minmax(0, 1fr) 40px; }
   .gar-row .input-affix { grid-column: auto; }
+}
+
+/* ==========================================================================
+   Printer & install
+   ========================================================================== */
+.prn-model { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: var(--r); background: linear-gradient(135deg, var(--primary-50), #f6efff); margin-bottom: 18px; }
+.prn-model > .ic { width: 34px; height: 34px; color: var(--primary); }
+.prn-model div { display: flex; flex-direction: column; }
+.prn-model small { color: var(--muted); font-size: 13px; }
+.prn-modes { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 10px; }
+.prn-mode { display: flex; align-items: center; gap: 12px; padding: 14px; border: 1.5px solid var(--line); border-radius: var(--r); background: var(--surface); cursor: pointer; text-align: left; transition: .15s; }
+.prn-mode:hover { border-color: var(--primary-200); }
+.prn-mode.on { border-color: var(--primary); background: var(--primary-50); box-shadow: 0 0 0 3px rgba(99, 102, 241, .12); }
+.prn-mode.on .over-ic { background: var(--grad-btn); color: #fff; }
+.prn-mode.on .radio { border: 7px solid var(--primary); }
+.prn-mode .badge { flex: none; }
+.prn-help { display: flex; gap: 12px; margin-top: 16px; padding: 14px 16px; border-radius: var(--r); background: var(--sky-bg); color: #0b4f7a; font-size: 14px; }
+.prn-help > .ic { color: var(--sky); margin-top: 2px; }
+.prn-help ol, .steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.steps { font-size: 15px; line-height: 1.6; }
+.prn-help a { font-weight: 600; text-decoration: underline; }
+.prn-status { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; padding: 12px 14px; border-radius: var(--r); background: var(--surface-2); border: 1px solid var(--line-2); font-size: 14px; }
+.prn-status .btn { margin-left: auto; }
+.prn-status .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--faint); }
+.prn-status .dot.on { background: var(--green); box-shadow: 0 0 0 4px var(--green-bg); }
+.prn-actions { display: flex; gap: 10px; margin-top: 16px; }
+.prn-preview { display: grid; place-items: center; padding: 20px; border-radius: var(--r); background: var(--surface-3); overflow: auto; }
+.prn-canvas { width: 288px; max-width: 100%; height: auto; background: #fff; box-shadow: var(--sh); image-rendering: pixelated; }
+.install-side { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; margin-bottom: 10px; border: 1px dashed var(--primary-200); border-radius: var(--r); background: var(--primary-50); color: var(--primary-700); font-weight: 600; font-size: 13.5px; cursor: pointer; }
+.install-side .ic { width: 18px; height: 18px; }
+.install-btn { margin-top: 14px; }
+@media (max-width: 1100px) {
+  .install-side span { display: none; }
+  .install-side { justify-content: center; }
+}
+@media (max-width: 860px) {
+  /* iOS จะซูมหน้าจอเมื่อแตะช่องกรอกที่ตัวอักษรเล็กกว่า 16px */
+  input, select, textarea { font-size: 16px; }
+  .prn-modes { grid-template-columns: minmax(0, 1fr); }
 }

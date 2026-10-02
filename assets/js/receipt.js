@@ -6,51 +6,62 @@
 /** บิลรับผ้าของลูกค้าแพ็คเกจ */
 const isPkgOrder = r => r.kind !== 'pkg' && r.left != null;
 
-function receiptHTML(r) {
-  const s = db.shop;
-  const L = (a, b, cls = '') => `<div class="rc-l ${cls}"><span>${a}</span><span>${b}</span></div>`;
+/**
+ * โครงสร้างใบเสร็จ (ใช้ร่วมกันทั้งหน้าจอ, พิมพ์ผ่านเบราว์เซอร์ และพิมพ์ตรงเครื่องพิมพ์ความร้อน)
+ * แถว: hr | c (กลาง) | lr (ซ้าย-ขวา) | note | img
+ */
+function receiptRows(r) {
+  const s = db.shop, R = [];
+  const lr = (l, rt = '', o = {}) => R.push(Object.assign({ t: 'lr', l, r: rt }, o));
   const hideZero = isPkgOrder(r) && !cfg().showPkgAmt;
-  const lines = r.lines.map(l => {
+  if (r.void) R.push({ t: 'c', text: '*** ใบเสร็จนี้ถูกยกเลิกแล้ว ***', bold: true });
+  if (s.logo) R.push({ t: 'img', src: s.logo, w: 40, h: 22 });
+  R.push({ t: 'c', text: s.name, bold: true, size: 'lg' });
+  if (s.phone) R.push({ t: 'c', text: 'โทร ' + s.phone });
+  if (s.addr) R.push({ t: 'c', text: s.addr });
+  if (s.tax) R.push({ t: 'c', text: 'เลขประจำตัวผู้เสียภาษี ' + s.tax });
+  R.push({ t: 'hr' });
+  lr('เลขที่ ' + r.no, dSlash(r.date) + ' ' + (r.time || ''));
+  lr('ลูกค้า: ' + r.name + (r.phone ? ' (' + r.phone + ')' : ''));
+  R.push({ t: 'hr' });
+  r.lines.forEach(l => {
     const showAmt = l.a !== '' && !(hideZero && !+l.a);
-    const head = L(`${esc(l.t)}${l.q ? ' x' + l.q + (l.unit || '') : ''}`, l.price != null && cfg().showUnitPrice ? '@' + fm(l.price) : '');
-    const sub = (l.note || showAmt) ? L(`<small>${esc(l.note || '')}</small>`, showAmt ? fm(l.a) + ' บาท' : '') : '';
-    return head + sub;
-  }).join('');
-  let pk = '';
+    lr(`${l.t}${l.q ? ' x' + l.q + (l.unit || '') : ''}`, l.price != null && cfg().showUnitPrice ? '@' + fm(l.price) : '');
+    if (l.note || showAmt) lr(l.note || '', showAmt ? fm(l.a) + ' บาท' : '', { small: true });
+  });
+  R.push({ t: 'hr' });
+  lr('รวมเป็นเงิน', fm(r.total) + ' บาท', { bold: true, size: 'md' });
   if (r.left != null) {
     if (r.used != null) {
-      pk = (r.before < 0 ? L('เกินแพ็คเกจจากรอบก่อน', -r.before + ' ชิ้น') : L('ยอดคงเหลือก่อนหน้า', r.before + ' ชิ้น')) +
-        L('ใช้จากแพ็คเกจ', r.used + ' ชิ้น') +
-        (r.renewed ? L('เกินแพ็คเกจเดิม', r.overflow + ' ชิ้น') + L('ค่าต่อแพ็คเกจใหม่', fm(r.renewFee) + ' บาท') : '') +
-        (r.carried ? L('เกินแพ็คเกจครั้งนี้', r.carried + ' ชิ้น') : '');
+      r.before < 0 ? lr('เกินแพ็คเกจจากรอบก่อน', -r.before + ' ชิ้น') : lr('ยอดคงเหลือก่อนหน้า', r.before + ' ชิ้น');
+      lr('ใช้จากแพ็คเกจ', r.used + ' ชิ้น');
+      if (r.renewed) { lr('เกินแพ็คเกจเดิม', r.overflow + ' ชิ้น'); lr('ค่าต่อแพ็คเกจใหม่', fm(r.renewFee) + ' บาท'); }
+      if (r.carried) lr('เกินแพ็คเกจครั้งนี้', r.carried + ' ชิ้น');
     } else {
-      pk = (r.pieces ? L('แพ็คเกจใหม่', '+' + r.pieces + ' ชิ้น') : '') +
-        (r.owedBefore ? L('หักยอดเกินจากรอบก่อน', '−' + r.owedBefore + ' ชิ้น') : '') +
-        (r.kept ? L('ทบยอดคงเหลือเดิม', '+' + r.kept + ' ชิ้น') : '');
+      if (r.pieces) lr('แพ็คเกจใหม่', '+' + r.pieces + ' ชิ้น');
+      if (r.owedBefore) lr('หักยอดเกินจากรอบก่อน', '−' + r.owedBefore + ' ชิ้น');
+      if (r.kept) lr('ทบยอดคงเหลือเดิม', '+' + r.kept + ' ชิ้น');
     }
-    pk += L(`<b>${r.used != null ? 'คงเหลือ' + (r.renewed ? 'หลังต่อแพ็คเกจ' : '') : 'แพ็คเกจคงเหลือ'}</b>`, `<b>${Math.max(0, r.left)} ชิ้น</b>`);
-    if (r.left < 0) pk += L('<b>เกินแพ็คเกจรวม</b>', `<b>${-r.left} ชิ้น</b>`) + '<div class="rc-note">* ส่วนที่เกินแพ็คเกจจะหักจากแพ็คเกจถัดไป</div>';
+    lr(r.used != null ? 'คงเหลือ' + (r.renewed ? 'หลังต่อแพ็คเกจ' : '') : 'แพ็คเกจคงเหลือ', Math.max(0, r.left) + ' ชิ้น', { bold: true });
+    if (r.left < 0) { lr('เกินแพ็คเกจรวม', -r.left + ' ชิ้น', { bold: true }); R.push({ t: 'note', text: '* ส่วนที่เกินแพ็คเกจจะหักจากแพ็คเกจถัดไป' }); }
   }
-  return `<div class="rc">
-    ${r.void ? '<div class="rc-void">*** ใบเสร็จนี้ถูกยกเลิกแล้ว ***</div>' : ''}
-    <div class="rc-c">
-      ${s.logo ? `<img class="rc-logo" src="${s.logo}" alt="">` : ''}
-      <div class="rc-shop">${esc(s.name)}</div>
-      ${s.phone ? `<div>โทร ${esc(s.phone)}</div>` : ''}
-      ${s.addr ? `<div>${esc(s.addr)}</div>` : ''}
-      ${s.tax ? `<div>เลขประจำตัวผู้เสียภาษี ${esc(s.tax)}</div>` : ''}
-    </div>
-    <hr>
-    ${L('เลขที่ ' + r.no, dSlash(r.date) + ' ' + (r.time || ''))}
-    <div>ลูกค้า: <b>${esc(r.name)}</b>${r.phone ? ' (' + esc(r.phone) + ')' : ''}</div>
-    <hr>${lines}<hr>
-    ${L('<b>รวมเป็นเงิน</b>', `<b>${fm(r.total)} บาท</b>`, 'rc-total')}
-    ${pk}
-    ${r.exp ? L('หมดอายุ', dSlash(r.exp)) : ''}
-    <hr>
-    ${s.qr ? `<div class="rc-c"><img class="rc-qr" src="${s.qr}" alt=""><div><small>สแกนเพื่อชำระเงิน</small></div></div><hr>` : ''}
-    <div class="rc-c">${esc(s.foot)}</div>
-  </div>`;
+  if (r.exp) lr('หมดอายุ', dSlash(r.exp));
+  R.push({ t: 'hr' });
+  if (s.qr) { R.push({ t: 'img', src: s.qr, w: 40, h: 40 }); R.push({ t: 'c', text: 'สแกนเพื่อชำระเงิน', small: true }); R.push({ t: 'hr' }); }
+  if (s.foot) R.push({ t: 'c', text: s.foot });
+  return R;
+}
+
+function receiptHTML(r) {
+  const body = receiptRows(r).map(x => {
+    if (x.t === 'hr') return '<hr>';
+    if (x.t === 'img') return `<div class="rc-c"><img class="${x.h > 30 ? 'rc-qr' : 'rc-logo'}" src="${x.src}" alt=""></div>`;
+    if (x.t === 'note') return `<div class="rc-note">${esc(x.text)}</div>`;
+    const cls = [x.bold && 'b', x.size && 'sz-' + x.size, x.small && 'sm'].filter(Boolean).join(' ');
+    if (x.t === 'c') return `<div class="rc-c ${cls}">${esc(x.text)}</div>`;
+    return `<div class="rc-l ${cls}"><span>${esc(x.l)}</span><span>${esc(x.r)}</span></div>`;
+  }).join('');
+  return `<div class="rc">${body}</div>`;
 }
 
 /** ข้อความสรุปสำหรับแจ้งลูกค้า (LINE / คัดลอก) */
@@ -90,6 +101,12 @@ async function copyText(t) {
   }
 }
 
+/** หลังออกใบเสร็จใหม่: แสดงใบเสร็จ และพิมพ์อัตโนมัติถ้าเปิดไว้ */
+function issueRc(r) {
+  showRc(r);
+  if (prn().auto) printReceipt(r);
+}
+
 function showRc(r) {
   if (!r) return toast('ไม่พบใบเสร็จ', 'error');
   const m = openModal({
@@ -101,9 +118,9 @@ function showRc(r) {
     footer: `<button class="btn btn-ghost" data-close>ปิด</button>
              <button class="btn btn-soft" data-copy>${icon('copy')}คัดลอกข้อความ</button>
              <a class="btn btn-line" href="https://line.me/R/share?text=${encodeURIComponent(rcMessage(r))}" target="_blank" rel="noopener">${icon('message')}แจ้งลูกค้าทาง LINE</a>
-             <button class="btn btn-primary" data-print>${icon('printer')}พิมพ์ 80mm</button>`
+             <button class="btn btn-primary" data-print>${icon(prn().mode === 'image' ? 'image' : 'printer')}${prn().mode === 'image' ? 'บันทึกรูปใบเสร็จ' : 'พิมพ์ใบเสร็จ'}</button>`
   });
-  m.q('[data-print]').addEventListener('click', () => printDoc(receiptHTML(r), 'rc'));
+  m.q('[data-print]').addEventListener('click', () => printReceipt(r));
   m.q('[data-copy]').addEventListener('click', async () => toast(await copyText(rcMessage(r)) ? 'คัดลอกข้อความแล้ว วางส่งให้ลูกค้าได้เลย' : 'คัดลอกไม่สำเร็จ', 'info'));
 }
 

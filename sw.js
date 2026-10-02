@@ -1,9 +1,9 @@
 /* Service worker: ใช้งานออฟไลน์ได้ (cache-first + อัปเดตเบื้องหลัง) */
-const V = 'laundry-v5';
+const V = 'laundry-v6';
 const F = [
   './', './index.html', './manifest.webmanifest',
   './assets/css/app.css',
-  './assets/js/store.js', './assets/js/icons.js', './assets/js/ui.js', './assets/js/admin.js', './assets/js/receipt.js',
+  './assets/js/store.js', './assets/js/icons.js', './assets/js/ui.js', './assets/js/admin.js', './assets/js/receipt.js', './assets/js/printer.js',
   './assets/js/views/home.js', './assets/js/views/order.js', './assets/js/views/customers.js',
   './assets/js/views/packages.js', './assets/js/views/receipts.js', './assets/js/views/accounts.js',
   './assets/js/views/settings.js', './assets/js/app.js',

@@ -152,7 +152,7 @@ function buyPkg(id) {
     const lines = [{ t: p.name, q: '', a: p.price }, { t: p.pieces + ' ชิ้น / ' + p.days + ' วัน', q: '', a: '' }];
     const r = mkRc({ kind: 'pkg', name: c.name, phone: c.phone, lines, total: p.price, left: c.left, exp: c.exp, pieces: p.pieces, owedBefore: owed, kept });
     db.ledger.push({ id: uid(), date: r.date, type: 'in', title: 'แพ็คเกจ ' + p.name + ' - ' + c.name + ' (' + r.no + ')', cat: 'ค่าแพ็คเกจ', amt: p.price, rc: r.no });
-    save(); render(); showRc(r);
+    save(); render(); issueRc(r);
     toast(`ขายแพ็คเกจ ${p.name} ให้ ${c.name} แล้ว · คงเหลือ ${pcs(net)}`);
   });
 }

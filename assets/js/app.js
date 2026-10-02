@@ -40,6 +40,7 @@ function renderSidebar() {
     <a class="brand" href="#/home">${brandMark()}<span class="brand-text"><b>${esc(db.shop.name)}</b><small>ระบบจัดการร้านซักรีด</small></span></a>
     <nav class="nav">${nav}</nav>
     <div class="side-foot">
+      ${isStandalone() ? '' : `<button class="install-side" data-act="installApp" title="ติดตั้งเป็นแอป">${icon('download')}<span>ติดตั้งเป็นแอป</span></button>`}
       <div class="backup-card ${warn ? 'warn' : ''}">
         <span class="backup-ic">${icon(warn ? 'alert' : 'shield')}</span>
         <div><b>${warn ? 'ควรสำรองข้อมูล' : 'ข้อมูลปลอดภัย'}</b><small>${age == null ? 'ยังไม่เคยสำรองข้อมูล' : age === 0 ? 'สำรองล่าสุดวันนี้' : 'สำรองล่าสุด ' + age + ' วันก่อน'}</small></div>
@@ -76,7 +77,8 @@ function renderBottomNav() {
 ACT.moreMenu = () => {
   const m = openModal({
     title: 'เมนูเพิ่มเติม', ic: 'grid', size: 'sm', cls: 'sheet',
-    body: `<div class="more-grid">${TABS.map(t => `<a href="#/${t.k}" class="more-item ${state.route === t.k ? 'on' : ''}" data-close><span class="nav-ic">${icon(t.ic)}</span>${t.l}</a>`).join('')}</div>`
+    body: `<div class="more-grid">${TABS.map(t => `<a href="#/${t.k}" class="more-item ${state.route === t.k ? 'on' : ''}" data-close><span class="nav-ic">${icon(t.ic)}</span>${t.l}</a>`).join('')}</div>
+      ${isStandalone() ? '' : `<button class="btn btn-soft btn-block install-btn" data-act="installApp" data-close>${icon('download')}ติดตั้งเป็นแอปบนเครื่องนี้</button>`}`
   });
   return m;
 };
@@ -126,6 +128,23 @@ ACT.go = el => go(el.dataset.to);
 ACT.reprint = el => showRc(rcByNo(el.dataset.no));
 ACT.voidRc = adminOnly(el => voidRc(el.dataset.no));
 ACT.delRc = adminOnly(el => delRc(el.dataset.no));
+
+/* ---------- ติดตั้งเป็นแอป (PWA) บนมือถือ/แท็บเล็ต/คอมพิวเตอร์ ---------- */
+let installEvt = null;
+const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; });
+window.addEventListener('appinstalled', () => { installEvt = null; toast('ติดตั้งแอปเรียบร้อย เปิดได้จากหน้าจอหลัก'); render(); });
+ACT.installApp = async () => {
+  if (installEvt) { installEvt.prompt(); const r = await installEvt.userChoice; installEvt = null; if (r.outcome === 'accepted') return; }
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  openModal({
+    title: 'ติดตั้งเป็นแอป', subtitle: 'เปิดใช้งานเต็มจอเหมือนแอป ทั้งมือถือและแท็บเล็ต', ic: 'download', size: 'sm',
+    body: ios
+      ? `<ol class="steps"><li>เปิดหน้านี้ด้วย <b>Safari</b></li><li>แตะปุ่ม <b>แชร์</b> (สี่เหลี่ยมมีลูกศรขึ้น) ด้านล่างหรือมุมขวาบน</li><li>เลือก <b>“เพิ่มไปยังหน้าจอโฮม”</b> แล้วแตะ <b>เพิ่ม</b></li></ol>`
+      : `<ol class="steps"><li>เปิดหน้านี้ด้วย <b>Chrome</b> (Android) หรือ Chrome/Edge (คอมพิวเตอร์)</li><li>แตะเมนู <b>⋮</b> มุมขวาบน</li><li>เลือก <b>“ติดตั้งแอป”</b> หรือ <b>“เพิ่มลงในหน้าจอหลัก”</b></li></ol>`,
+    footer: '<button class="btn btn-primary" data-close>เข้าใจแล้ว</button>'
+  });
+};
 
 /* ---------- init ---------- */
 route();

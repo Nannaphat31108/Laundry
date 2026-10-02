@@ -266,6 +266,6 @@ ACT.checkout = () => {
   if (cl.renewInfo) db.ledger.push({ id: uid(), date: r.date, type: 'in', title: 'ต่อแพ็คเกจอัตโนมัติ ' + cl.renewInfo.pkg.name + ' - ' + r.name + ' (' + r.no + ')', cat: 'ค่าแพ็คเกจ', amt: cl.renewInfo.fee, rc: r.no });
   save();
   state.cart = {}; state.over = cfg().overDefault;
-  render(); showRc(r);
+  render(); issueRc(r);
   toast('บันทึกบิล ' + r.no + ' เรียบร้อย');
 };
