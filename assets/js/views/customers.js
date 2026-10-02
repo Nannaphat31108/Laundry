@@ -56,22 +56,36 @@ ACT.custFilter = el => { state.custFilter = el.dataset.k; renderPart('#cust-chip
 ACT.editCust = el => editCust(el.dataset.id);
 
 function editCust(id, onCreated) {
-  const c = id ? cust(id) : {};
-  const fields = [
+  const c = id ? cust(id) : {}, adm = isAdmin();
+  let fields = [
     { k: 'name', l: 'ชื่อลูกค้า', req: true, ph: 'เช่น คุณสมชาย' },
     { k: 'phone', l: 'เบอร์โทร', t: 'tel', ph: '08x-xxx-xxxx', half: true },
     { k: 'line', l: 'ไลน์ไอดี (ถ้ามี)', ph: '@lineid', half: true }
-  ].concat(id && c.pkgId ? [
+  ];
+  // แอดมิน: แก้แพ็คเกจ ยอดคงเหลือ และวันหมดอายุได้ทั้งหมด
+  if (id && adm) fields = fields.concat([
+    { k: 'pkgId', l: 'แพ็คเกจ', t: 'select', o: [['', '— ไม่มีแพ็คเกจ —']].concat(db.packages.map(p => [p.id, p.name])).concat(c.pkgId && !pkgById(c.pkgId) ? [[c.pkgId, c.pkgName + ' (ถูกลบแล้ว)']] : []) },
     { k: 'left', l: 'จำนวนคงเหลือ (ชิ้น)', t: 'number', step: 1, min: -9999, suffix: 'ชิ้น', half: true, hint: 'ติดลบ = ชิ้นที่เกินแพ็คเกจ รอหักแพ็คเกจถัดไป' },
     { k: 'exp', l: 'วันหมดอายุ', t: 'date', half: true }
-  ] : []);
-  formDlg({
+  ]);
+  const intro = id && !adm && c.pkgId ? `<div class="alert alert-info slim lock-hint">${icon('lock')}<div>แก้แพ็คเกจ ยอดคงเหลือ หรือวันหมดอายุ ต้องเข้าสู่โหมดแอดมิน</div><button class="btn btn-sm btn-soft" data-unlock>${icon('shield')}แอดมิน</button></div>` : '';
+  const m = formDlg({
     title: id ? 'แก้ไขลูกค้า' : 'เพิ่มลูกค้า', subtitle: id && c.pkgId ? 'แพ็คเกจ: ' + esc(c.pkgName) : '', ic: id ? 'edit' : 'userPlus',
-    fields, values: c, okText: id ? 'บันทึก' : 'เพิ่มลูกค้า',
+    fields, values: c, okText: id ? 'บันทึก' : 'เพิ่มลูกค้า', intro,
     onOk: o => {
       if (!o.name) return { k: 'name', msg: 'กรุณาใส่ชื่อ' };
-      if (id) { if ('left' in o) o.left = Math.round(o.left) || 0; Object.assign(c, o); toast('บันทึกข้อมูลลูกค้าแล้ว'); }
-      else {
+      if (id) {
+        if ('pkgId' in o) {
+          const p = pkgById(o.pkgId);
+          if (!o.pkgId) Object.assign(o, { pkgName: '', left: 0, exp: '' });
+          else {
+            if (p) o.pkgName = p.name;
+            if (!o.exp) return { k: 'exp', msg: 'กรุณาระบุวันหมดอายุ' };
+          }
+        }
+        if ('left' in o) o.left = Math.round(o.left) || 0;
+        Object.assign(c, o); toast('บันทึกข้อมูลลูกค้าแล้ว');
+      } else {
         const n = { id: uid(), name: o.name, phone: o.phone, line: o.line, pkgId: '', pkgName: '', left: 0, exp: '' };
         db.customers.push(n); toast('เพิ่มลูกค้า ' + o.name + ' แล้ว');
         if (onCreated) { save(); setTimeout(() => onCreated(n)); return; }
@@ -79,14 +93,17 @@ function editCust(id, onCreated) {
       save(); render();
     },
     danger: id ? {
-      text: 'ลบ', onClick: async m => {
+      text: 'ลบ', onClick: async m2 => {
+        if (!await requireAdmin()) return;
         if (!await confirmDlg({ title: `ลบลูกค้า “${esc(c.name)}”?`, msg: '<p>ข้อมูลลูกค้าและยอดแพ็คเกจคงเหลือจะถูกลบ (ใบเสร็จเดิมยังอยู่)</p>', okText: 'ลบลูกค้า' })) return;
         db.customers = db.customers.filter(x => x.id != id);
         if (state.sel == id) state.sel = '';
-        save(); m.close(); render(); toast('ลบลูกค้าแล้ว');
+        save(); m2.close(); render(); toast('ลบลูกค้าแล้ว');
       }
     } : null
   });
+  const ub = m.q('[data-unlock]');
+  if (ub) ub.addEventListener('click', async () => { if (await requireAdmin()) { m.close(); setTimeout(() => editCust(id, onCreated), 200); } });
 }
 
 ACT.buyPkg = el => buyPkg(el.dataset.id);

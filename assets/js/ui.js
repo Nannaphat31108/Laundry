@@ -95,7 +95,7 @@ function formDlg({ title, subtitle = '', ic = 'edit', tone = 'primary', fields, 
     const v = values[f.k] ?? '';
     const id = fid + '-' + f.k;
     let ctl;
-    if (f.t === 'select') ctl = `<select id="${id}" data-k="${f.k}">${f.o.map(o => `<option ${o == v ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
+    if (f.t === 'select') ctl = `<select id="${id}" data-k="${f.k}">${f.o.map(o => { const [ov, ol] = Array.isArray(o) ? o : [o, o]; return `<option value="${esc(ov)}" ${ov == v ? 'selected' : ''}>${esc(ol)}</option>`; }).join('')}</select>`;
     else if (f.t === 'textarea') ctl = `<textarea id="${id}" data-k="${f.k}" rows="3" placeholder="${esc(f.ph || '')}">${esc(v)}</textarea>`;
     else ctl = `<input id="${id}" data-k="${f.k}" type="${f.t || 'text'}" value="${esc(v)}" placeholder="${esc(f.ph || '')}"
       ${f.t === 'number' ? `inputmode="decimal" min="${f.min ?? 0}" step="${f.step ?? 'any'}"` : ''} ${f.t === 'tel' ? 'inputmode="tel"' : ''} autocomplete="off">`;

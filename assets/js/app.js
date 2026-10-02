@@ -9,8 +9,8 @@ const TABS = [
   { k: 'cust', l: 'ลูกค้า', ic: 'users', g: 'จัดการร้าน' },
   { k: 'pkg', l: 'แพ็คเกจ', ic: 'package', g: 'จัดการร้าน' },
   { k: 'rc', l: 'ใบเสร็จ', ic: 'receipt', g: 'จัดการร้าน' },
-  { k: 'acct', l: 'บัญชี', ic: 'wallet', g: 'การเงิน' },
-  { k: 'set', l: 'ตั้งค่าร้าน', ic: 'settings', g: 'การเงิน' }
+  { k: 'acct', l: 'บัญชี', ic: 'wallet', g: 'การเงิน & ระบบ' },
+  { k: 'set', l: 'ผู้ดูแลระบบ', short: 'แอดมิน', ic: 'shield', g: 'การเงิน & ระบบ' }
 ];
 const MOBILE_TABS = ['home', 'cust', 'order', 'rc', 'more'];
 
@@ -55,6 +55,9 @@ function renderTopbar() {
     <a class="top-brand" href="#/home">${brandMark('sm')}<b>${esc(db.shop.name)}</b></a>
     <div class="crumbs"><span>${esc(db.shop.name)}</span>${icon('chevronRight')}<b>${t.l}</b></div>
     <div class="top-right">
+      ${isAdmin()
+        ? `<button class="admin-chip on" data-act="adminLock" title="ล็อกโหมดแอดมิน">${icon('shield')}<span>แอดมิน</span>${icon('lock')}</button>`
+        : `<button class="admin-chip" data-act="adminLogin" title="เข้าสู่โหมดแอดมิน">${icon('lock')}<span>แอดมิน</span></button>`}
       <span class="date-pill">${icon(h >= 18 || h < 6 ? 'moon' : 'sun')}<span>${dLong()}</span></span>
       ${state.route !== 'order' ? `<a class="btn btn-primary btn-sm top-cta" href="#/order">${icon('plus')}รับผ้าใหม่</a>` : ''}
     </div>`;
@@ -80,6 +83,7 @@ ACT.moreMenu = () => {
 
 let lastRoute = null;
 function render() {
+  document.body.classList.toggle('is-admin', isAdmin());
   if (lastRoute !== state.route) { state.ledLimit = 50; state.rcLimit = 50; }
   renderSidebar(); renderTopbar(); renderBottomNav();
   const v = V[state.route] || V.home;
@@ -120,8 +124,8 @@ ACT.setFrom = el => { if (el.value) { state.from = el.value; if (state.from > st
 ACT.setTo = el => { if (el.value) { state.to = el.value; if (state.to < state.from) state.from = state.to; render(); } };
 ACT.go = el => go(el.dataset.to);
 ACT.reprint = el => showRc(rcByNo(el.dataset.no));
-ACT.voidRc = el => voidRc(el.dataset.no);
-ACT.delRc = el => delRc(el.dataset.no);
+ACT.voidRc = adminOnly(el => voidRc(el.dataset.no));
+ACT.delRc = adminOnly(el => delRc(el.dataset.no));
 
 /* ---------- init ---------- */
 route();

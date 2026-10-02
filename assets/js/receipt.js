@@ -3,16 +3,16 @@
    ========================================================================== */
 'use strict';
 
-/** บิลรับผ้าของลูกค้าแพ็คเกจ: ไม่แสดงราคาต่อชิ้นในใบเสร็จ */
+/** บิลรับผ้าของลูกค้าแพ็คเกจ */
 const isPkgOrder = r => r.kind !== 'pkg' && r.left != null;
 
 function receiptHTML(r) {
   const s = db.shop;
   const L = (a, b, cls = '') => `<div class="rc-l ${cls}"><span>${a}</span><span>${b}</span></div>`;
-  const noPrice = isPkgOrder(r);
+  const hideZero = isPkgOrder(r) && !cfg().showPkgAmt;
   const lines = r.lines.map(l => {
-    const showAmt = l.a !== '' && !(noPrice && !+l.a);
-    const head = L(`${esc(l.t)}${l.q ? ' x' + l.q + (l.unit || '') : ''}`, l.price != null && !noPrice ? '@' + fm(l.price) : '');
+    const showAmt = l.a !== '' && !(hideZero && !+l.a);
+    const head = L(`${esc(l.t)}${l.q ? ' x' + l.q + (l.unit || '') : ''}`, l.price != null && cfg().showUnitPrice ? '@' + fm(l.price) : '');
     const sub = (l.note || showAmt) ? L(`<small>${esc(l.note || '')}</small>`, showAmt ? fm(l.a) + ' บาท' : '') : '';
     return head + sub;
   }).join('');
@@ -57,8 +57,8 @@ function receiptHTML(r) {
 function rcMessage(r) {
   const s = db.shop, out = [];
   out.push(`🧺 ${s.name}`, `ใบเสร็จ ${r.no} · ${dSlash(r.date)} ${r.time || ''}`, `ลูกค้า: ${r.name}`, '');
-  const noPrice = isPkgOrder(r);
-  r.lines.forEach(l => out.push(`• ${l.t}${l.q ? ' x' + l.q + (l.unit || '') : ''}${l.a !== '' && l.a != null && !(noPrice && !+l.a) ? ' = ' + fm(l.a) + ' บาท' : ''}${l.note ? '\n   (' + l.note + ')' : ''}`));
+  const hideZero = isPkgOrder(r) && !cfg().showPkgAmt;
+  r.lines.forEach(l => out.push(`• ${l.t}${l.q ? ' x' + l.q + (l.unit || '') : ''}${l.a !== '' && l.a != null && !(hideZero && !+l.a) ? ' = ' + fm(l.a) + ' บาท' : ''}${l.note ? '\n   (' + l.note + ')' : ''}`));
   out.push('', `💰 ยอดชำระ ${fm(r.total)} บาท`);
   if (r.left != null) {
     out.push('', '📦 แพ็คเกจ');

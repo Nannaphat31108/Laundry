@@ -6,9 +6,23 @@
 
 const KEY = 'laundry_v1';
 const UNITS = ['ชิ้น', 'กก.'];
-const PKG_TYPES = ['รายเดือน', 'รายวัน', 'อื่นๆ'];
-const CAT_IN = ['ค่าบริการซักรีด', 'ค่าแพ็คเกจ', 'อื่นๆ'];
-const CAT_OUT = ['ค่าน้ำยา/อุปกรณ์', 'ค่าน้ำ-ไฟ', 'ค่าเช่า', 'ค่าแรง', 'อื่นๆ'];
+const DEF_PKG_TYPES = ['รายเดือน', 'รายวัน', 'อื่นๆ'];
+const DEF_CAT_IN = ['ค่าบริการซักรีด', 'ค่าแพ็คเกจ', 'อื่นๆ'];
+const DEF_CAT_OUT = ['ค่าน้ำยา/อุปกรณ์', 'ค่าน้ำ-ไฟ', 'ค่าเช่า', 'ค่าแรง', 'อื่นๆ'];
+/** ค่าตั้งต้นของกฎระบบ (แอดมินแก้ได้ที่หน้าผู้ดูแลระบบ) */
+const DEF_CFG = {
+  lowLeft: 5,            // แจ้งเตือนเมื่อแพ็คเกจเหลือ ≤ N ชิ้น
+  warnDays: 3,           // แจ้งเตือนเมื่อหมดอายุภายใน N วัน
+  overDefault: 'carry',  // วิธีจัดการชิ้นที่เกินแพ็คเกจ: carry | renew | cash
+  rcPrefix: 'R',         // ตัวอักษรนำหน้าเลขใบเสร็จ
+  showUnitPrice: false,  // แสดงราคาต่อชิ้น (@) ในใบเสร็จ
+  showPkgAmt: false,     // แสดงยอดเงิน 0 บาทของรายการที่หักแพ็คเกจ
+  lockMin: 15            // ล็อกโหมดแอดมินอัตโนมัติหลังไม่ใช้งาน N นาที
+};
+const PKG_TYPES_LIST = () => db.pkgTypes;
+const CAT_IN_LIST = () => db.cats.in;
+const CAT_OUT_LIST = () => db.cats.out;
+const cfg = () => db.cfg;
 const TH_MONTHS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
 const TH_MONTHS_FULL = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
 const TH_DAYS = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
@@ -21,7 +35,11 @@ function defaultDb() {
       ['ผ้ารีด', 'ชิ้น', 10], ['ซักรีด', 'ชิ้น', 30], ['ซักพับ', 'กก.', 40], ['ซักแห้ง', 'ชิ้น', 80], ['เครื่องนอน', 'ชิ้น', 150]
     ].map((a, i) => ({ id: 'g' + i, name: a[0], unit: a[1], price: a[2] })),
     packages: [{ id: 'p1', name: 'รายเดือน 50 ชิ้น', type: 'รายเดือน', pieces: 50, price: 700, days: 30 }],
-    customers: [], orders: [], ledger: [], rc: [], seq: 0
+    customers: [], orders: [], ledger: [], rc: [], seq: 0,
+    cfg: Object.assign({}, DEF_CFG),
+    cats: { in: DEF_CAT_IN.slice(), out: DEF_CAT_OUT.slice() },
+    pkgTypes: DEF_PKG_TYPES.slice(),
+    admin: { pin: '' }
   };
 }
 
@@ -32,6 +50,10 @@ function migrate(d) {
   d.shop = Object.assign({}, base.shop, d.shop || {});
   ['garments', 'packages', 'customers', 'orders', 'ledger', 'rc'].forEach(k => { if (!Array.isArray(d[k])) d[k] = k === 'garments' || k === 'packages' ? base[k] : []; });
   d.seq = +d.seq || 0;
+  d.cfg = Object.assign({}, DEF_CFG, d.cfg || {});
+  d.cats = d.cats && Array.isArray(d.cats.in) && Array.isArray(d.cats.out) ? d.cats : { in: DEF_CAT_IN.slice(), out: DEF_CAT_OUT.slice() };
+  if (!Array.isArray(d.pkgTypes) || !d.pkgTypes.length) d.pkgTypes = DEF_PKG_TYPES.slice();
+  d.admin = Object.assign({ pin: '' }, d.admin || {});
   d.garments.forEach(g => { if (!g.unit) g.unit = 'ชิ้น'; g.price = +g.price || 0; });
   d.customers.forEach(c => { if (c.line == null) c.line = ''; if (c.phone == null) c.phone = ''; });
   return d;
@@ -82,7 +104,7 @@ const active = c => !!(c && c.pkgId && c.left > 0 && c.exp >= today());
 const owedOf = c => (c && c.pkgId && c.left < 0 ? -c.left : 0);
 /** แสดงยอดคงเหลือ: ติดลบ = เกินแพ็คเกจ รอหักจากแพ็คเกจถัดไป */
 const pcs = n => (n < 0 ? `เกิน ${-n} ชิ้น` : `${n} ชิ้น`);
-const needsFollow = c => c.pkgId && (c.left <= 5 || c.exp <= addDays(3));
+const needsFollow = c => c.pkgId && (c.left <= cfg().lowLeft || c.exp <= addDays(cfg().warnDays));
 
 /** สถานะแพ็คเกจของลูกค้า สำหรับป้ายสถานะ */
 function pkgStatus(c) {
@@ -90,12 +112,12 @@ function pkgStatus(c) {
   if (c.left < 0) return { key: 'owed', label: 'เกิน ' + (-c.left) + ' ชิ้น', tone: 'danger' };
   if (c.exp < today()) return { key: 'expired', label: 'หมดอายุ', tone: 'danger' };
   if (c.left <= 0) return { key: 'empty', label: 'ใช้ครบแล้ว', tone: 'danger' };
-  if (c.left <= 5 || c.exp <= addDays(3)) return { key: 'low', label: 'ใกล้หมด', tone: 'warning' };
+  if (c.left <= cfg().lowLeft || c.exp <= addDays(cfg().warnDays)) return { key: 'low', label: 'ใกล้หมด', tone: 'warning' };
   return { key: 'active', label: 'ใช้งานอยู่', tone: 'success' };
 }
 
 function mkRc(r) {
-  r.no = 'R' + today().replace(/-/g, '').slice(2) + '-' + String(++db.seq).padStart(3, '0');
+  r.no = (cfg().rcPrefix || '') + today().replace(/-/g, '').slice(2) + '-' + String(++db.seq).padStart(3, '0');
   r.date = today();
   r.time = new Date().toTimeString().slice(0, 5);
   db.rc.push(r);
@@ -132,6 +154,6 @@ const ACT = {};  // actions: data-act / data-input / data-change → ACT[name](e
 const state = {
   route: 'home',
   from: today().slice(0, 8) + '01', to: today(),
-  cart: {}, sel: '', over: 'carry',
-  q: '', custFilter: 'all', rcQ: '', ledFilter: 'all', ledLimit: 50, rcLimit: 50
+  cart: {}, sel: '', over: db.cfg.overDefault,
+  q: '', custFilter: 'all', rcQ: '', ledFilter: 'all', ledLimit: 50, rcLimit: 50, admTab: 'shop'
 };

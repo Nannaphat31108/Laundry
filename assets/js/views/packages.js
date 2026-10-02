@@ -31,11 +31,11 @@ V.pkg = {
       ${db.packages.length ? `<div class="pkg-grid">${cards}
         <button class="pkg-add" data-act="editPkg"><span>${icon('plus')}</span><b>เพิ่มแพ็คเกจใหม่</b><small>กำหนดจำนวนชิ้น ราคา และอายุการใช้งาน</small></button></div>`
         : `<div class="card">${empty('package', 'ยังไม่มีแพ็คเกจ', 'สร้างแพ็คเกจเพื่อขายให้ลูกค้าประจำ', `<button class="btn btn-primary" data-act="editPkg">${icon('plus')}เพิ่มแพ็คเกจ</button>`)}</div>`}
-      <div class="alert alert-info">${icon('info')}<div>ลูกค้าทั่วไป/รายวัน คิดตามราคาต่อชิ้นในหน้า <a href="#/set">ตั้งค่าร้าน</a> · รายการหน่วย “ชิ้น” หักจากแพ็คเกจได้ ส่วนหน่วย “กก.” คิดราคาตามน้ำหนักเสมอ</div></div>`;
+      <div class="alert alert-info">${icon('info')}<div>ลูกค้าทั่วไป/รายวัน คิดตามราคาต่อชิ้นที่ตั้งในหน้า <a href="#/set">ผู้ดูแลระบบ</a> · รายการหน่วย “ชิ้น” หักจากแพ็คเกจได้ ส่วนหน่วย “กก.” คิดราคาตามน้ำหนักเสมอ</div></div>`;
   }
 };
 
-ACT.editPkg = el => editPkg(el.dataset.id);
+ACT.editPkg = adminOnly(el => editPkg(el.dataset.id));
 
 function editPkg(id) {
   const p = id ? pkgById(id) : { type: 'รายเดือน', days: 30 };
@@ -43,7 +43,7 @@ function editPkg(id) {
     title: id ? 'แก้ไขแพ็คเกจ' : 'เพิ่มแพ็คเกจ', ic: 'package', tone: 'pink',
     fields: [
       { k: 'name', l: 'ชื่อแพ็คเกจ', ph: 'เช่น รายเดือน 50 ชิ้น', req: true },
-      { k: 'type', l: 'ประเภท', t: 'select', o: PKG_TYPES, half: true },
+      { k: 'type', l: 'ประเภท', t: 'select', o: PKG_TYPES_LIST(), half: true },
       { k: 'pieces', l: 'จำนวนชิ้น', t: 'number', step: 1, suffix: 'ชิ้น', req: true, half: true },
       { k: 'price', l: 'ราคา', t: 'number', suffix: 'บาท', half: true },
       { k: 'days', l: 'ใช้ได้กี่วัน', t: 'number', step: 1, suffix: 'วัน', half: true }
@@ -52,15 +52,19 @@ function editPkg(id) {
     onOk: o => {
       if (!o.name) return { k: 'name', msg: 'กรุณาใส่ชื่อแพ็คเกจ' };
       if (!(o.pieces > 0)) return { k: 'pieces', msg: 'กรุณาใส่จำนวนชิ้น' };
-      if (id) Object.assign(p, o); else db.packages.push({ id: uid(), ...o });
+      if (id) { Object.assign(p, o); db.customers.forEach(c => { if (c.pkgId == id) c.pkgName = p.name; }); } else db.packages.push({ id: uid(), ...o });
       save(); render(); toast(id ? 'บันทึกแพ็คเกจแล้ว' : 'เพิ่มแพ็คเกจแล้ว');
     },
     danger: id ? {
-      text: 'ลบ', onClick: async m => {
-        if (!await confirmDlg({ title: `ลบแพ็คเกจ “${esc(p.name)}”?`, msg: '<p>ลูกค้าที่ซื้อแพ็คเกจนี้ไปแล้วยังใช้ยอดคงเหลือเดิมได้ แต่จะต่อแพ็คเกจอัตโนมัติไม่ได้</p>', okText: 'ลบแพ็คเกจ' })) return;
-        db.packages = db.packages.filter(x => x.id != id);
-        save(); m.close(); render(); toast('ลบแพ็คเกจแล้ว');
-      }
+      text: 'ลบ', onClick: async m => { if (await deletePkg(id)) m.close(); }
     } : null
   });
+}
+
+async function deletePkg(id) {
+  const p = pkgById(id); if (!p) return false;
+  if (!await confirmDlg({ title: `ลบแพ็คเกจ “${esc(p.name)}”?`, msg: '<p>ลูกค้าที่ซื้อแพ็คเกจนี้ไปแล้วยังใช้ยอดคงเหลือเดิมได้ แต่จะต่อแพ็คเกจอัตโนมัติไม่ได้</p>', okText: 'ลบแพ็คเกจ' })) return false;
+  db.packages = db.packages.filter(x => x.id != id);
+  save(); render(); toast('ลบแพ็คเกจแล้ว');
+  return true;
 }

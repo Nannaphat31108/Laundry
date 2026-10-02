@@ -127,7 +127,7 @@ V.home = {
           ${chart}
         </div>
         <div class="card">
-          <div class="card-head"><div><h2>ต้องติดตาม</h2><p>แพ็คเกจเหลือ ≤ 5 ชิ้น หรือหมดอายุภายใน 3 วัน</p></div>${low.length ? `<span class="count-pill">${low.length}</span>` : ''}</div>
+          <div class="card-head"><div><h2>ต้องติดตาม</h2><p>แพ็คเกจเหลือ ≤ ${cfg().lowLeft} ชิ้น หรือหมดอายุภายใน ${cfg().warnDays} วัน</p></div>${low.length ? `<span class="count-pill">${low.length}</span>` : ''}</div>
           ${low.length ? `<div class="follow-list">${low.map(followItem).join('')}</div>` : empty('checkCircle', 'ไม่มีรายการต้องติดตาม', 'ลูกค้าแพ็คเกจทุกคนยังมียอดคงเหลือเพียงพอ')}
         </div>
       </section>

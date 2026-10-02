@@ -172,7 +172,7 @@ V.order = {
           <div class="card cust-card">${customerCard()}</div>
           <div class="sec-head" id="pg-piece-h">${pieceHead()}</div>
           ${pg.length ? `<div class="tile-grid">${pg.map(tileHTML).join('')}</div>`
-            : `<div class="card">${empty('shirt', 'ยังไม่มีรายการผ้า', 'เพิ่มประเภทผ้าและราคาได้ในหน้าตั้งค่าร้าน', `<a class="btn btn-soft" href="#/set">${icon('settings')}ไปตั้งค่าร้าน</a>`)}</div>`}
+            : `<div class="card">${empty('shirt', 'ยังไม่มีรายการผ้า', 'เพิ่มประเภทผ้าและราคาได้ในหน้าผู้ดูแลระบบ', `<a class="btn btn-soft" href="#/set">${icon('shield')}ไปหน้าผู้ดูแลระบบ</a>`)}</div>`}
           ${wg.length ? `<div class="sec-head"><h2>รายการคิดตามน้ำหนัก (กก.)</h2>${badge('ไม่หักจากแพ็คเกจ', 'neutral')}</div><div class="tile-grid">${wg.map(tileHTML).join('')}</div>` : ''}
         </div>
         <aside class="pos-side"><div class="card sum" id="pos-sum">${summaryHTML()}</div></aside>
@@ -204,9 +204,9 @@ ACT.wstep = el => {
   const inp = $(`#t-${id} input`); if (inp) inp.value = v || '';
   refreshOrder([id]);
 };
-ACT.clearCart = () => { state.cart = {}; state.over = 'carry'; render(); };
+ACT.clearCart = () => { state.cart = {}; state.over = cfg().overDefault; render(); };
 ACT.setOver = el => { state.over = el.dataset.k; refreshOrder(); };
-ACT.selCust = el => { state.sel = el.dataset.id; state.over = 'carry'; if (state.route === 'order') render(); else go('order'); };
+ACT.selCust = el => { state.sel = el.dataset.id; state.over = cfg().overDefault; if (state.route === 'order') render(); else go('order'); };
 
 document.addEventListener('keydown', e => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.tile[data-act="tileAdd"]')) { e.preventDefault(); ACT.tileAdd(e.target, e); }
@@ -236,9 +236,9 @@ ACT.pickCust = () => {
   inp.addEventListener('input', () => { m.q('.pick-list').innerHTML = listHTML(inp.value); });
   m.q('.pick-list').addEventListener('click', e => {
     const b = e.target.closest('[data-pick]'); if (!b) return;
-    state.sel = b.dataset.pick; state.over = 'carry'; m.close(); render();
+    state.sel = b.dataset.pick; state.over = cfg().overDefault; m.close(); render();
   });
-  m.q('[data-new]').addEventListener('click', () => { m.close(); editCust(null, c => { state.sel = c.id; state.over = 'carry'; render(); }); });
+  m.q('[data-new]').addEventListener('click', () => { m.close(); editCust(null, c => { state.sel = c.id; state.over = cfg().overDefault; render(); }); });
 };
 
 ACT.checkout = () => {
@@ -265,7 +265,7 @@ ACT.checkout = () => {
   if (svcPay > 0) db.ledger.push({ id: uid(), date: r.date, type: 'in', title: 'ซักรีด ' + r.name + ' (' + r.no + ')', cat: 'ค่าบริการซักรีด', amt: svcPay, rc: r.no });
   if (cl.renewInfo) db.ledger.push({ id: uid(), date: r.date, type: 'in', title: 'ต่อแพ็คเกจอัตโนมัติ ' + cl.renewInfo.pkg.name + ' - ' + r.name + ' (' + r.no + ')', cat: 'ค่าแพ็คเกจ', amt: cl.renewInfo.fee, rc: r.no });
   save();
-  state.cart = {}; state.over = 'carry';
+  state.cart = {}; state.over = cfg().overDefault;
   render(); showRc(r);
   toast('บันทึกบิล ' + r.no + ' เรียบร้อย');
 };

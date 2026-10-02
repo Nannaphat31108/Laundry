@@ -17,7 +17,8 @@ function ledTable() {
       <td data-l="จำนวนเงิน" class="r num amt-${x.type}"><b>${x.type == 'in' ? '+' : '−'}${fm(x.amt)}</b></td>
       <td class="r actions">
         ${x.rc ? `<button class="btn btn-sm btn-soft" data-act="reprint" data-no="${esc(x.rc)}">${icon('receipt')}ใบเสร็จ</button>` : ''}
-        <button class="icon-btn danger" data-act="delLed" data-id="${x.id}" title="ลบ" aria-label="ลบรายการ">${icon('trash')}</button>
+        <button class="icon-btn" data-act="editLed" data-id="${x.id}" title="แก้ไข (แอดมิน)" aria-label="แก้ไขรายการ">${icon('edit')}</button>
+        <button class="icon-btn danger" data-act="delLed" data-id="${x.id}" title="ลบ (แอดมิน)" aria-label="ลบรายการ">${icon('trash')}</button>
       </td></tr>`).join('')}</tbody></table></div>
     ${more > 0 ? `<div class="more-row"><button class="btn btn-ghost" data-act="ledMore">${icon('chevronDown')}แสดงเพิ่มอีก ${Math.min(more, 50)} รายการ (เหลือ ${more})</button></div>` : ''}`;
 }
@@ -87,7 +88,7 @@ ACT.addLed = el => {
     title: t == 'in' ? 'เพิ่มรายรับ' : 'เพิ่มรายจ่าย', ic: t == 'in' ? 'trendUp' : 'trendDown', tone: t == 'in' ? 'green' : 'danger',
     fields: [
       { k: 'title', l: 'รายการ', req: true, ph: t == 'in' ? 'เช่น ค่าบริการเพิ่มเติม' : 'เช่น ซื้อน้ำยาปรับผ้านุ่ม' },
-      { k: 'cat', l: 'หมวดหมู่', t: 'select', o: t == 'in' ? CAT_IN : CAT_OUT, half: true },
+      { k: 'cat', l: 'หมวดหมู่', t: 'select', o: t == 'in' ? CAT_IN_LIST() : CAT_OUT_LIST(), half: true },
       { k: 'date', l: 'วันที่', t: 'date', half: true },
       { k: 'amt', l: 'จำนวนเงิน', t: 'number', suffix: 'บาท', req: true }
     ],
@@ -102,12 +103,34 @@ ACT.addLed = el => {
   });
 };
 
-ACT.delLed = async el => {
+ACT.delLed = adminOnly(async el => {
   const x = db.ledger.find(l => l.id == el.dataset.id); if (!x) return;
   if (!await confirmDlg({ title: 'ลบรายการนี้?', msg: `<p>${esc(x.title)} · ${money(x.amt)}</p>`, okText: 'ลบรายการ' })) return;
   db.ledger = db.ledger.filter(l => l.id != x.id);
   save(); render(); toast('ลบรายการแล้ว');
-};
+});
+
+ACT.editLed = adminOnly(el => {
+  const x = db.ledger.find(l => l.id == el.dataset.id); if (!x) return;
+  formDlg({
+    title: 'แก้ไขรายการบัญชี', subtitle: x.rc ? 'ผูกกับใบเสร็จ ' + esc(x.rc) : '', ic: 'edit', tone: x.type == 'in' ? 'green' : 'danger',
+    fields: [
+      { k: 'type', l: 'ประเภท', t: 'select', o: [['in', 'รายรับ'], ['out', 'รายจ่าย']], half: true },
+      { k: 'date', l: 'วันที่', t: 'date', half: true },
+      { k: 'title', l: 'รายการ', req: true },
+      { k: 'cat', l: 'หมวดหมู่', t: 'select', o: [...new Set([...CAT_IN_LIST(), ...CAT_OUT_LIST(), x.cat || 'อื่นๆ'])], half: true },
+      { k: 'amt', l: 'จำนวนเงิน', t: 'number', suffix: 'บาท', req: true, half: true }
+    ],
+    values: x, okText: 'บันทึก',
+    onOk: o => {
+      if (!o.title) return { k: 'title', msg: 'กรุณาใส่รายการ' };
+      if (!(o.amt > 0)) return { k: 'amt', msg: 'กรุณาใส่จำนวนเงิน' };
+      if (!o.date) o.date = x.date;
+      Object.assign(x, o);
+      save(); render(); toast('แก้ไขรายการบัญชีแล้ว');
+    }
+  });
+});
 
 ACT.csv = () => {
   const { l } = ledgerStats(state.from, state.to), e = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
