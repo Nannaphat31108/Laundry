@@ -36,7 +36,7 @@ function renderSidebar() {
       <span class="nav-ic">${icon(t.ic)}</span><span class="nav-label">${t.l}</span>${count}</a>`;
   });
   const age = backupAge();
-  const warn = age == null || age > 7;
+  const synced = syncOn(), warn = !synced && (age == null || age > 7);
   $('#sidebar').innerHTML = `
     <a class="brand" href="#/home">${brandMark()}<span class="brand-text"><b>${esc(db.shop.name)}</b><small>ระบบจัดการร้านซักรีด</small></span></a>
     <nav class="nav">${nav}</nav>
@@ -44,7 +44,7 @@ function renderSidebar() {
       ${isStandalone() ? '' : `<button class="install-side" data-act="installApp" title="ติดตั้งเป็นแอป">${icon('download')}<span>ติดตั้งเป็นแอป</span></button>`}
       <div class="backup-card ${warn ? 'warn' : ''}">
         <span class="backup-ic">${icon(warn ? 'alert' : 'shield')}</span>
-        <div><b>${warn ? 'ควรสำรองข้อมูล' : 'ข้อมูลปลอดภัย'}</b><small>${age == null ? 'ยังไม่เคยสำรองข้อมูล' : age === 0 ? 'สำรองล่าสุดวันนี้' : 'สำรองล่าสุด ' + age + ' วันก่อน'}</small></div>
+        <div><b>${warn ? 'ควรสำรองข้อมูล' : synced ? 'ซิงค์ออนไลน์' : 'ข้อมูลปลอดภัย'}</b><small>${synced ? 'ข้อมูลเก็บบนคลาวด์ ใช้ได้หลายเครื่อง' : age == null ? 'ยังไม่เคยสำรองข้อมูล' : age === 0 ? 'สำรองล่าสุดวันนี้' : 'สำรองล่าสุด ' + age + ' วันก่อน'}</small></div>
         <button class="icon-btn sm" data-act="backup" title="ดาวน์โหลดไฟล์สำรอง" aria-label="ดาวน์โหลดไฟล์สำรอง">${icon('download')}</button>
       </div>
     </div>`;
@@ -57,6 +57,7 @@ function renderTopbar() {
     <a class="top-brand" href="#/home">${brandMark('sm')}<b>${esc(db.shop.name)}</b></a>
     <div class="crumbs"><span>${esc(db.shop.name)}</span>${icon('chevronRight')}<b>${t.l}</b></div>
     <div class="top-right">
+      ${syncChip()}
       <a class="admin-chip prn-chip" href="#/prn" title="เครื่องพิมพ์">${icon('printer')}<span>เครื่องพิมพ์</span></a>
       ${isAdmin()
         ? `<button class="admin-chip on" data-act="adminLock" title="ล็อกโหมดแอดมิน">${icon('shield')}<span>แอดมิน</span>${icon('lock')}</button>`
@@ -102,6 +103,8 @@ function renderPart(sel, html) { const el = $(sel); if (el) el.innerHTML = html;
 
 function go(k) { if (location.hash !== '#/' + k) location.hash = '#/' + k; else { state.route = k; render(); } }
 function route() {
+  const jm = location.hash.match(/^#\/join\/(.+)$/);
+  if (jm) { history.replaceState(null, '', location.pathname + '#/home'); state.route = 'home'; render(); setTimeout(() => syncJoinPrompt(jm[1]), 300); return; }
   const k = (location.hash.match(/^#\/(\w+)/) || [])[1];
   state.route = V[k] ? k : 'home';
   render();
@@ -150,5 +153,6 @@ ACT.installApp = async () => {
 
 /* ---------- init ---------- */
 route();
+syncStart();
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
 try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (e) { /* ignore */ }

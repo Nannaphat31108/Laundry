@@ -79,7 +79,7 @@ V.home = {
     const week = sumBy(days, incOf);
 
     const age = backupAge();
-    const backupTip = age == null || age > 7
+    const backupTip = !syncOn() && (age == null || age > 7)
       ? `<div class="alert alert-info slim">${icon('shield')}<div>ข้อมูลทั้งหมดอยู่ในเครื่องนี้ ${age == null ? 'และยังไม่เคยสำรองข้อมูล' : 'สำรองล่าสุด ' + age + ' วันก่อน'} — แนะนำให้สำรองสัปดาห์ละครั้ง</div><button class="btn btn-sm btn-soft" data-act="backup">${icon('download')}สำรองเลย</button></div>` : '';
 
     const qa = [

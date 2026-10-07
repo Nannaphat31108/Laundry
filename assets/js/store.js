@@ -74,7 +74,7 @@ try { db = JSON.parse(localStorage.getItem(KEY)); } catch (e) { db = null; }
 db = migrate(db);
 
 function save() {
-  try { localStorage.setItem(KEY, JSON.stringify(db)); return true; }
+  try { localStorage.setItem(KEY, JSON.stringify(db)); if (typeof syncPush === 'function') syncPush(); return true; }
   catch (e) { toast('บันทึกไม่ได้ พื้นที่จัดเก็บเต็มหรือถูกบล็อก', 'error'); return false; }
 }
 

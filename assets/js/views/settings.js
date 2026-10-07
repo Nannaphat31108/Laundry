@@ -10,6 +10,7 @@ const ADM_TABS = [
   ['price', 'หมวด & ราคา', 'layers'],
   ['pkg', 'แพ็คเกจ', 'package'],
   ['list', 'หมวดหมู่', 'tag'],
+  ['sync', 'หลายเครื่อง', 'cloud'],
   ['rule', 'กฎระบบ', 'sliders'],
   ['data', 'ข้อมูล & รหัส', 'shield']
 ];
@@ -205,6 +206,8 @@ ADM.data = () => {
     </section>`;
 };
 
+
+ADM.sync = () => syncPanel();
 
 V.set = {
   render() {

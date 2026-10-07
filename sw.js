@@ -1,9 +1,9 @@
 /* Service worker: ใช้งานออฟไลน์ได้ (cache-first + อัปเดตเบื้องหลัง) */
-const V = 'laundry-v10';
+const V = 'laundry-v11';
 const F = [
   './', './index.html', './manifest.webmanifest',
   './assets/css/app.css',
-  './assets/js/store.js', './assets/js/icons.js', './assets/js/ui.js', './assets/js/admin.js', './assets/js/receipt.js', './assets/js/printer.js',
+  './assets/js/store.js', './assets/js/icons.js', './assets/js/ui.js', './assets/js/admin.js', './assets/js/receipt.js', './assets/js/printer.js', './assets/js/sync.js',
   './assets/js/views/home.js', './assets/js/views/order.js', './assets/js/views/customers.js',
   './assets/js/views/packages.js', './assets/js/views/receipts.js', './assets/js/views/accounts.js',
   './assets/js/views/settings.js', './assets/js/app.js',
@@ -16,6 +16,8 @@ self.addEventListener('activate', e => {
 });
 self.addEventListener('fetch', e => {
   if (e.request.method != 'GET') return;
+  const u = new URL(e.request.url);
+  if (/firebaseio\.com|firebasedatabase\.app/.test(u.hostname)) return; // ข้อมูลซิงค์: ไม่เก็บแคช
   e.respondWith(caches.match(e.request, { ignoreSearch: true }).then(m => {
     const n = fetch(e.request).then(r => {
       if (r.ok || r.type === 'opaque') caches.open(V).then(c => c.put(e.request, r.clone()));
