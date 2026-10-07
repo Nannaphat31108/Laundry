@@ -183,7 +183,8 @@ V.order = {
           <div class="card cust-card">${customerCard()}</div>
           ${groups.length > 1 ? `<nav class="grp-jump" aria-label="ไปยังหมวด">${groups.map(({ gr, items }) => `<button class="chip" data-act="grpJump" data-id="${gr.id}">${esc(gr.name)}<span class="chip-n">${items.length}</span></button>`).join('')}</nav>` : ''}
           ${groups.length ? groups.map(({ gr, items }) => `${groupHead(gr, items)}<div class="tile-grid">${items.map(tileHTML).join('')}</div>`).join('')
-            : `<div class="card">${empty('shirt', 'ยังไม่มีรายการผ้า', 'เพิ่มหมวดและรายการผ้าได้ในหน้าผู้ดูแลระบบ', `<a class="btn btn-soft" href="#/set">${icon('shield')}ไปหน้าผู้ดูแลระบบ</a>`)}</div>`}
+              + `<button class="btn btn-ghost manage-link" data-act="goPrice">${icon('layers')}เพิ่มหมวด / แก้ราคา (แอดมิน)</button>`
+            : `<div class="card">${empty('shirt', 'ยังไม่มีรายการผ้า', 'เพิ่มหมวดและรายการผ้าได้ในหน้าผู้ดูแลระบบ', `<button class="btn btn-soft" data-act="goPrice">${icon('layers')}เพิ่มหมวดและราคา</button>`)}</div>`}
         </div>
         <aside class="pos-side"><div class="card sum" id="pos-sum">${summaryHTML()}</div></aside>
       </div>
@@ -192,6 +193,7 @@ V.order = {
 };
 
 /* ---------- actions ---------- */
+ACT.goPrice = () => { state.admTab = 'price'; if (state.route === 'set') render(); else go('set'); };
 ACT.grpJump = el => { const h = $('#grp-' + el.dataset.id); if (h) h.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
 ACT.tileAdd = (el, e) => {
   if (e.target.closest('.stepper')) return;

@@ -65,6 +65,12 @@ function migrate(d) {
   d.garments.forEach(g => {
     if (!gids.has(g.grp)) g.grp = g.unit == 'กก.' && gids.has('grp-kg') ? 'grp-kg' : d.groups[0].id;
   });
+  // วิธีคิดราคาของหมวด: ตามชิ้น หรือ ตามน้ำหนัก (หมวด กก. ไม่หักแพ็คเกจ)
+  d.groups.forEach(gr => {
+    const items = d.garments.filter(g => g.grp === gr.id);
+    if (!UNITS.includes(gr.unit)) gr.unit = (items.length ? items.every(g => g.unit == 'กก.') : gr.id === 'grp-kg') ? 'กก.' : 'ชิ้น';
+    if (gr.unit == 'กก.') gr.pkg = false;
+  });
   d.customers.forEach(c => { if (c.line == null) c.line = ''; if (c.phone == null) c.phone = ''; });
   return d;
 }
