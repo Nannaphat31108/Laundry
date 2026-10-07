@@ -95,7 +95,8 @@ async function receiptCanvas(r, opt = prn()) {
   const P = Math.round(W * 0.012), CW = W - P * 2;   // ขอบซ้าย-ขวาเล็กน้อย กันตัวอักษรชิดขอบ
   let y = 6;
 
-  for (const x of rows) {
+  for (let x of rows) {
+    if (x.t === 'grp') x = { t: 'c', text: '[ ' + x.text + ' ]', bold: true, small: true };
     if (x.t === 'hr') {
       y += 8;
       for (let i = P; i < W - P; i += 14) ctx.fillRect(i, y, 8, 2);

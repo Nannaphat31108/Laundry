@@ -1,5 +1,5 @@
 /* Service worker: ใช้งานออฟไลน์ได้ (cache-first + อัปเดตเบื้องหลัง) */
-const V = 'laundry-v9';
+const V = 'laundry-v10';
 const F = [
   './', './index.html', './manifest.webmanifest',
   './assets/css/app.css',

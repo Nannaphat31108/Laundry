@@ -7,7 +7,7 @@
 
 const ADM_TABS = [
   ['shop', 'ร้าน & ใบเสร็จ', 'store'],
-  ['price', 'ราคาต่อชิ้น', 'shirt'],
+  ['price', 'หมวด & ราคา', 'layers'],
   ['pkg', 'แพ็คเกจ', 'package'],
   ['list', 'หมวดหมู่', 'tag'],
   ['rule', 'กฎระบบ', 'sliders'],
@@ -81,20 +81,41 @@ ADM.shop = () => {
     </section>`;
 };
 
+function garRow(g, i, list) {
+  const multi = db.groups.length > 1;
+  return `<div class="gar-row ${multi ? 'has-grp' : ''}">
+    <div class="reorder"><button class="icon-btn sm" data-act="garMove" data-id="${g.id}" data-d="-1" ${i ? '' : 'disabled'} aria-label="เลื่อนขึ้น">${icon('chevronUp')}</button><button class="icon-btn sm" data-act="garMove" data-id="${g.id}" data-d="1" ${i < list.length - 1 ? '' : 'disabled'} aria-label="เลื่อนลง">${icon('chevronDown')}</button></div>
+    <div class="gar-name"><span class="gar-ic ${g.unit == 'กก.' ? 'kg' : ''}">${icon(g.unit == 'กก.' ? 'scale' : 'shirt')}</span>
+      <input value="${esc(g.name)}" data-change="garSet" data-id="${g.id}" data-k="name" aria-label="ชื่อรายการ"></div>
+    <div class="input-affix"><input type="number" inputmode="decimal" min="0" value="${g.price}" data-change="garSet" data-id="${g.id}" data-k="price" aria-label="ราคา"><span class="affix">บาท</span></div>
+    <select data-change="garSet" data-id="${g.id}" data-k="unit" aria-label="หน่วย">${UNITS.map(u => `<option ${u == g.unit ? 'selected' : ''}>${u}</option>`).join('')}</select>
+    ${multi ? `<select data-change="garSet" data-id="${g.id}" data-k="grp" aria-label="ย้ายไปหมวด" title="ย้ายไปหมวด">${db.groups.map(gr => `<option value="${gr.id}" ${gr.id == g.grp ? 'selected' : ''}>${esc(gr.name)}</option>`).join('')}</select>` : ''}
+    <button class="icon-btn danger" data-act="delGar" data-id="${g.id}" title="ลบ" aria-label="ลบ ${esc(g.name)}">${icon('trash')}</button>
+  </div>`;
+}
+
 ADM.price = () => `<section class="card">
-    ${secHead('shirt', 'pink', 'ประเภทผ้า / บริการ และราคาต่อชิ้น', `${db.garments.length} รายการ · แก้แล้วบันทึกทันที · ลากลำดับด้วยปุ่มลูกศร`,
-      `<button class="btn btn-primary btn-sm" data-act="addGar">${icon('plus')}เพิ่มรายการ</button>`)}
-    <div class="gar-list">${db.garments.length ? `<div class="gar-head"><span></span><span>ชื่อรายการ</span><span>ราคาต่อหน่วย</span><span>หน่วย</span><span></span></div>` +
-      db.garments.map((g, i) => `<div class="gar-row">
-        <div class="reorder"><button class="icon-btn sm" data-act="garMove" data-i="${i}" data-d="-1" ${i ? '' : 'disabled'} aria-label="เลื่อนขึ้น">${icon('chevronUp')}</button><button class="icon-btn sm" data-act="garMove" data-i="${i}" data-d="1" ${i < db.garments.length - 1 ? '' : 'disabled'} aria-label="เลื่อนลง">${icon('chevronDown')}</button></div>
-        <div class="gar-name"><span class="gar-ic ${g.unit == 'กก.' ? 'kg' : ''}">${icon(g.unit == 'กก.' ? 'scale' : 'shirt')}</span>
-          <input value="${esc(g.name)}" data-change="garSet" data-id="${g.id}" data-k="name" aria-label="ชื่อรายการ"></div>
-        <div class="input-affix"><input type="number" inputmode="decimal" min="0" value="${g.price}" data-change="garSet" data-id="${g.id}" data-k="price" aria-label="ราคา"><span class="affix">บาท</span></div>
-        <select data-change="garSet" data-id="${g.id}" data-k="unit" aria-label="หน่วย">${UNITS.map(u => `<option ${u == g.unit ? 'selected' : ''}>${u}</option>`).join('')}</select>
-        <button class="icon-btn danger" data-act="delGar" data-id="${g.id}" title="ลบ" aria-label="ลบ ${esc(g.name)}">${icon('trash')}</button>
-      </div>`).join('') : empty('shirt', 'ยังไม่มีประเภทผ้า/บริการ', 'เพิ่มรายการเพื่อใช้ในหน้ารับผ้า')}</div>
-    <div class="alert alert-info slim">${icon('info')}<div>หน่วย “ชิ้น” หักจากแพ็คเกจได้ ส่วนหน่วย “กก.” คิดราคาตามน้ำหนักเสมอ · การเปลี่ยนราคามีผลกับบิลใหม่เท่านั้น ใบเสร็จเดิมไม่เปลี่ยน</div></div>
-  </section>`;
+    ${secHead('layers', 'pink', 'หมวดหมู่และราคา', `${db.groups.length} หมวด · ${db.garments.length} รายการ · แก้แล้วบันทึกทันที`,
+      `<button class="btn btn-primary btn-sm" data-act="grpAdd">${icon('plus')}เพิ่มหมวดใหม่</button>`)}
+    <div class="alert alert-info slim">${icon('info')}<div>แบ่งรายการเป็นหมวด เช่น <b>ซักรีด</b>, <b>รีดอย่างเดียว</b>, <b>ซักแห้ง</b>, <b>คิดตามน้ำหนัก</b> — หน้ารับผ้าจะแสดงแยกตามหมวด และใบเสร็จจะจัดกลุ่มให้ · เปิด/ปิด “หักแพ็คเกจได้” แยกแต่ละหมวด (หน่วย กก. คิดเงินเสมอ) · เปลี่ยนราคามีผลกับบิลใหม่เท่านั้น</div></div>
+  </section>
+  ${db.groups.map((gr, gi) => {
+    const items = db.garments.filter(g => grpOf(g) === gr);
+    return `<section class="card grp-card">
+      <div class="grp-head">
+        <div class="reorder"><button class="icon-btn sm" data-act="grpMove" data-id="${gr.id}" data-d="-1" ${gi ? '' : 'disabled'} aria-label="เลื่อนหมวดขึ้น">${icon('chevronUp')}</button><button class="icon-btn sm" data-act="grpMove" data-id="${gr.id}" data-d="1" ${gi < db.groups.length - 1 ? '' : 'disabled'} aria-label="เลื่อนหมวดลง">${icon('chevronDown')}</button></div>
+        <div class="grp-name"><span class="grp-ic">${icon('layers')}</span><input value="${esc(gr.name)}" data-change="grpSet" data-id="${gr.id}" data-k="name" aria-label="ชื่อหมวด"></div>
+        <label class="grp-pkg"><span class="switch"><input type="checkbox" ${gr.pkg ? 'checked' : ''} data-change="grpSet" data-id="${gr.id}" data-k="pkg"><i></i></span><span>หักแพ็คเกจได้</span></label>
+        <div class="grp-actions">
+          <button class="btn btn-soft btn-sm" data-act="addGar" data-grp="${gr.id}">${icon('plus')}เพิ่มรายการ</button>
+          ${db.groups.length > 1 ? `<button class="btn btn-ghost btn-sm" data-act="grpCopy" data-id="${gr.id}" title="คัดลอกรายการจากหมวดอื่นมาใส่หมวดนี้">${icon('copy')}คัดลอกจากหมวดอื่น</button>` : ''}
+          <button class="icon-btn danger" data-act="grpDel" data-id="${gr.id}" ${db.groups.length > 1 ? '' : 'disabled'} title="ลบหมวด" aria-label="ลบหมวด ${esc(gr.name)}">${icon('trash')}</button>
+        </div>
+      </div>
+      <div class="gar-list">${items.length ? `<div class="gar-head ${db.groups.length > 1 ? 'has-grp' : ''}"><span></span><span>ชื่อรายการ</span><span>ราคาต่อหน่วย</span><span>หน่วย</span>${db.groups.length > 1 ? '<span>หมวด</span>' : ''}<span></span></div>` + items.map(garRow).join('')
+        : `<div class="grp-empty">ยังไม่มีรายการในหมวดนี้ — กด “เพิ่มรายการ”${db.groups.length > 1 ? ' หรือ “คัดลอกจากหมวดอื่น”' : ''}</div>`}</div>
+    </section>`;
+  }).join('')}`;
 
 ADM.pkg = () => `<section class="card">
     ${secHead('package', 'violet', 'แพ็คเกจ', `${db.packages.length} แพ็คเกจ · แก้ในตารางได้ทันที`,
@@ -229,28 +250,112 @@ A('seqSet', el => { db.seq = Math.max(0, Math.round(+el.value || 0)); save(); re
 A('garSet', el => {
   const g = db.garments.find(x => x.id == el.dataset.id); if (!g) return;
   const k = el.dataset.k;
-  g[k] = k === 'price' ? Math.max(0, +el.value || 0) : el.value.trim() || g[k];
+  if (k === 'price') g.price = Math.max(0, +el.value || 0);
+  else if (k === 'grp') {
+    // ย้ายไปท้ายหมวดใหม่
+    g.grp = el.value;
+    db.garments.splice(db.garments.indexOf(g), 1);
+    insertGarments([g]);
+  } else g[k] = el.value.trim() || g[k];
   if (k === 'unit') delete state.cart[g.id];
-  save(); toast('บันทึก “' + g.name + '” แล้ว');
-  if (k === 'unit') render();
+  save(); toast(k === 'grp' ? `ย้าย “${g.name}” ไปหมวด “${grpOf(g).name}” แล้ว` : 'บันทึก “' + g.name + '” แล้ว');
+  if (k === 'unit' || k === 'grp') render();
 });
 A('garMove', el => {
-  const i = +el.dataset.i, j = i + +el.dataset.d;
-  if (j < 0 || j >= db.garments.length) return;
-  [db.garments[i], db.garments[j]] = [db.garments[j], db.garments[i]];
+  const g = db.garments.find(x => x.id == el.dataset.id); if (!g) return;
+  const same = db.garments.filter(x => x.grp === g.grp), i = same.indexOf(g), other = same[i + +el.dataset.d];
+  if (!other) return;
+  const a = db.garments.indexOf(g), b = db.garments.indexOf(other);
+  [db.garments[a], db.garments[b]] = [db.garments[b], db.garments[a]];
   save(); render();
 });
-A('addGar', () => {
+A('addGar', el => {
+  const grp = (el && el.dataset && el.dataset.grp) || db.groups[0].id;
   formDlg({
-    title: 'เพิ่มประเภทผ้า/บริการ', ic: 'shirt', tone: 'pink',
+    title: 'เพิ่มรายการ', subtitle: 'หมวด: ' + esc(grpById(grp).name), ic: 'shirt', tone: 'pink',
     fields: [
-      { k: 'name', l: 'ชื่อรายการ', req: true, ph: 'เช่น ผ้าม่าน' },
+      { k: 'name', l: 'ชื่อรายการ', req: true, ph: 'เช่น เสื้อเชิ้ต' },
       { k: 'price', l: 'ราคา', t: 'number', suffix: 'บาท', half: true },
-      { k: 'unit', l: 'หน่วย', t: 'select', o: UNITS, half: true, hint: '“กก.” คิดตามน้ำหนัก ไม่หักแพ็คเกจ' }
+      { k: 'unit', l: 'หน่วย', t: 'select', o: UNITS, half: true, hint: '“กก.” คิดตามน้ำหนัก ไม่หักแพ็คเกจ' },
+      { k: 'grp', l: 'หมวด', t: 'select', o: db.groups.map(gr => [gr.id, gr.name]) }
     ],
-    values: { unit: 'ชิ้น', price: 20 }, okText: 'เพิ่มรายการ',
-    onOk: o => { db.garments.push({ id: uid(), name: o.name, unit: o.unit, price: o.price || 0 }); save(); render(); toast('เพิ่ม “' + o.name + '” แล้ว'); }
+    values: { unit: 'ชิ้น', price: 20, grp }, okText: 'เพิ่มรายการ',
+    onOk: o => {
+      insertGarments([{ id: uid(), name: o.name, unit: o.unit, price: o.price || 0, grp: o.grp }]);
+      save(); render(); toast('เพิ่ม “' + o.name + '” แล้ว');
+    }
   });
+});
+
+/* หมวดหมู่ */
+A('grpAdd', () => {
+  formDlg({
+    title: 'เพิ่มหมวดใหม่', ic: 'layers', tone: 'pink',
+    fields: [
+      { k: 'name', l: 'ชื่อหมวด', req: true, ph: 'เช่น รีดอย่างเดียว / ซักแห้ง / ซักพับ' },
+      { k: 'pkg', l: 'หักจากแพ็คเกจได้ไหม', t: 'select', o: [['yes', 'ได้ — ลูกค้าแพ็คเกจใช้ยอดชิ้นได้'], ['no', 'ไม่ได้ — คิดเงินทุกครั้ง']] },
+      { k: 'copy', l: 'เริ่มจากรายการของหมวด (ไม่บังคับ)', t: 'select', o: [['', '— เริ่มจากหมวดว่าง —']].concat(db.groups.map(gr => [gr.id, `คัดลอกรายการจาก “${gr.name}”`])), hint: 'คัดลอกชื่อและราคามาให้ แล้วค่อยแก้ราคาทีหลังได้' }
+    ],
+    values: { pkg: 'yes', copy: '' }, okText: 'สร้างหมวด',
+    onOk: o => {
+      if (db.groups.some(gr => gr.name === o.name)) return { k: 'name', msg: 'มีหมวดชื่อนี้แล้ว' };
+      const gr = { id: 'grp-' + uid(), name: o.name, pkg: o.pkg === 'yes' };
+      db.groups.push(gr);
+      const n = o.copy ? copyGroupItems(o.copy, gr.id) : 0;
+      state.admTab = 'price';
+      save(); render(); toast(`สร้างหมวด “${o.name}” แล้ว${n ? ` (คัดลอก ${n} รายการ)` : ''}`);
+      setTimeout(() => { const el = $$('.grp-card').pop(); el && el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50);
+    }
+  });
+});
+function copyGroupItems(fromId, toId) {
+  const copies = db.garments.filter(g => g.grp === fromId).map(g => ({ id: uid(), name: g.name, unit: g.unit, price: g.price, grp: toId }));
+  insertGarments(copies);
+  return copies.length;
+}
+/** แทรกรายการไว้ท้ายหมวดของมัน โดยเรียงตามลำดับหมวด */
+function insertGarments(list) {
+  if (!list.length) return;
+  const order = db.groups.map(gr => gr.id), gi = order.indexOf(list[0].grp);
+  let at = 0;
+  db.garments.forEach((x, i) => { if (order.indexOf(x.grp) <= gi) at = i + 1; });
+  db.garments.splice(at, 0, ...list);
+}
+A('grpSet', el => {
+  const gr = db.groups.find(x => x.id == el.dataset.id); if (!gr) return;
+  if (el.dataset.k === 'pkg') gr.pkg = el.checked;
+  else {
+    const v = el.value.trim();
+    if (!v || db.groups.some(x => x !== gr && x.name === v)) { el.value = gr.name; return toast(v ? 'มีหมวดชื่อนี้แล้ว' : 'ชื่อหมวดห้ามว่าง', 'error'); }
+    gr.name = v;
+  }
+  save(); toast('บันทึกหมวด “' + gr.name + '” แล้ว');
+});
+A('grpMove', el => {
+  const i = db.groups.findIndex(x => x.id == el.dataset.id), j = i + +el.dataset.d;
+  if (i < 0 || j < 0 || j >= db.groups.length) return;
+  [db.groups[i], db.groups[j]] = [db.groups[j], db.groups[i]];
+  const order = db.groups.map(gr => gr.id);
+  db.garments = db.garments.map((g, k) => [g, k]).sort((a, b) => order.indexOf(a[0].grp) - order.indexOf(b[0].grp) || a[1] - b[1]).map(x => x[0]);
+  save(); render();
+});
+A('grpCopy', el => {
+  const to = db.groups.find(x => x.id == el.dataset.id); if (!to) return;
+  formDlg({
+    title: 'คัดลอกรายการมาใส่หมวด “' + esc(to.name) + '”', ic: 'copy', tone: 'pink',
+    fields: [{ k: 'from', l: 'คัดลอกจากหมวด', t: 'select', o: db.groups.filter(x => x !== to).map(gr => [gr.id, `${gr.name} (${db.garments.filter(g => g.grp === gr.id).length} รายการ)`]) }],
+    values: {}, okText: 'คัดลอก',
+    onOk: o => { const n = copyGroupItems(o.from, to.id); save(); render(); toast(`คัดลอก ${n} รายการแล้ว — แก้ราคาได้เลย`); }
+  });
+});
+A('grpDel', async el => {
+  const gr = db.groups.find(x => x.id == el.dataset.id); if (!gr || db.groups.length < 2) return;
+  const n = db.garments.filter(g => g.grp === gr.id).length;
+  if (!await confirmDlg({ title: `ลบหมวด “${esc(gr.name)}”?`, okText: 'ลบหมวด', msg: n ? `<p>รายการในหมวดนี้ <b>${n} รายการ</b> จะถูกลบด้วย (ใบเสร็จเดิมไม่ได้รับผลกระทบ)</p>` : '<p>หมวดนี้ไม่มีรายการ</p>' })) return;
+  db.garments.filter(g => g.grp === gr.id).forEach(g => delete state.cart[g.id]);
+  db.garments = db.garments.filter(g => g.grp !== gr.id);
+  db.groups = db.groups.filter(x => x !== gr);
+  save(); render(); toast('ลบหมวดแล้ว');
 });
 A('delGar', async el => {
   const g = db.garments.find(x => x.id == el.dataset.id); if (!g) return;

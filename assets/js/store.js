@@ -55,6 +55,16 @@ function migrate(d) {
   if (!Array.isArray(d.pkgTypes) || !d.pkgTypes.length) d.pkgTypes = DEF_PKG_TYPES.slice();
   d.admin = Object.assign({ pin: '' }, d.admin || {});
   d.garments.forEach(g => { if (!g.unit) g.unit = 'ชิ้น'; g.price = +g.price || 0; });
+  // หมวดหมู่รายการผ้า (เช่น ซักรีด / รีดอย่างเดียว / คิดตามน้ำหนัก)
+  if (!Array.isArray(d.groups) || !d.groups.length) {
+    d.groups = [{ id: 'grp-wash', name: 'ซักรีด', pkg: true }];
+    if (d.garments.some(g => g.unit == 'กก.')) d.groups.push({ id: 'grp-kg', name: 'คิดตามน้ำหนัก', pkg: false });
+  }
+  d.groups.forEach(gr => { gr.pkg = gr.pkg !== false; if (!gr.name) gr.name = 'หมวด'; });
+  const gids = new Set(d.groups.map(gr => gr.id));
+  d.garments.forEach(g => {
+    if (!gids.has(g.grp)) g.grp = g.unit == 'กก.' && gids.has('grp-kg') ? 'grp-kg' : d.groups[0].id;
+  });
   d.customers.forEach(c => { if (c.line == null) c.line = ''; if (c.phone == null) c.phone = ''; });
   return d;
 }
@@ -98,6 +108,10 @@ const avatarTone = id => { let h = 0; for (const c of String(id)) h = (h * 31 + 
 
 /* ---------- domain ---------- */
 const cust = id => db.customers.find(c => c.id == id);
+const grpById = id => db.groups.find(g => g.id == id) || db.groups[0];
+const grpOf = g => grpById(g.grp);
+/** รายการนี้หักจากแพ็คเกจได้ไหม: หน่วย “ชิ้น” และอยู่ในหมวดที่เปิดให้หักแพ็คเกจ */
+const pkgEligible = g => g.unit != 'กก.' && grpOf(g).pkg;
 const pkgById = id => db.packages.find(p => p.id == id);
 const active = c => !!(c && c.pkgId && c.left > 0 && c.exp >= today());
 /** ยอดชิ้นที่ใช้เกินแพ็คเกจ รอหักจากแพ็คเกจถัดไป */
@@ -117,6 +131,7 @@ function pkgStatus(c) {
 }
 
 function mkRc(r) {
+  r.id = r.id || uid();
   r.no = (cfg().rcPrefix || '') + today().replace(/-/g, '').slice(2) + '-' + String(++db.seq).padStart(3, '0');
   r.date = today();
   r.time = new Date().toTimeString().slice(0, 5);

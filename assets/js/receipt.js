@@ -24,7 +24,10 @@ function receiptRows(r) {
   lr('เลขที่ ' + r.no, dSlash(r.date) + ' ' + (r.time || ''));
   lr('ลูกค้า: ' + r.name + (r.phone ? ' (' + r.phone + ')' : ''));
   R.push({ t: 'hr' });
+  const multiGrp = new Set(r.lines.map(l => l.grp).filter(Boolean)).size > 1;
+  let lastGrp = null;
   r.lines.forEach(l => {
+    if (multiGrp && l.grp && l.grp !== lastGrp) { lastGrp = l.grp; R.push({ t: 'grp', text: l.grp }); }
     const showAmt = l.a !== '' && !(hideZero && !+l.a);
     lr(`${l.t}${l.q ? ' x' + l.q + (l.unit || '') : ''}`, l.price != null && cfg().showUnitPrice ? '@' + fm(l.price) : '');
     if (l.note || showAmt) lr(l.note || '', showAmt ? fm(l.a) + ' บาท' : '', { small: true });
@@ -57,6 +60,7 @@ function receiptHTML(r) {
     if (x.t === 'hr') return '<hr>';
     if (x.t === 'img') return `<div class="rc-c"><img class="${x.h > 30 ? 'rc-qr' : 'rc-logo'}" src="${x.src}" alt=""></div>`;
     if (x.t === 'note') return `<div class="rc-note">${esc(x.text)}</div>`;
+    if (x.t === 'grp') return `<div class="rc-grp">[ ${esc(x.text)} ]</div>`;
     const cls = [x.bold && 'b', x.size && 'sz-' + x.size, x.small && 'sm'].filter(Boolean).join(' ');
     if (x.t === 'c') return `<div class="rc-c ${cls}">${esc(x.text)}</div>`;
     return `<div class="rc-l ${cls}"><span>${esc(x.l)}</span><span>${esc(x.r)}</span></div>`;
@@ -69,7 +73,12 @@ function rcMessage(r) {
   const s = db.shop, out = [];
   out.push(`🧺 ${s.name}`, `ใบเสร็จ ${r.no} · ${dSlash(r.date)} ${r.time || ''}`, `ลูกค้า: ${r.name}`, '');
   const hideZero = isPkgOrder(r) && !cfg().showPkgAmt;
-  r.lines.forEach(l => out.push(`• ${l.t}${l.q ? ' x' + l.q + (l.unit || '') : ''}${l.a !== '' && l.a != null && !(hideZero && !+l.a) ? ' = ' + fm(l.a) + ' บาท' : ''}${l.note ? '\n   (' + l.note + ')' : ''}`));
+  const mg = new Set(r.lines.map(l => l.grp).filter(Boolean)).size > 1;
+  let lg = null;
+  r.lines.forEach(l => {
+    if (mg && l.grp && l.grp !== lg) { lg = l.grp; out.push(`[${l.grp}]`); }
+    out.push(`• ${l.t}${l.q ? ' x' + l.q + (l.unit || '') : ''}${l.a !== '' && l.a != null && !(hideZero && !+l.a) ? ' = ' + fm(l.a) + ' บาท' : ''}${l.note ? '\n   (' + l.note + ')' : ''}`);
+  });
   out.push('', `💰 ยอดชำระ ${fm(r.total)} บาท`);
   if (r.left != null) {
     out.push('', '📦 แพ็คเกจ');

@@ -3,8 +3,9 @@
    ========================================================================== */
 'use strict';
 
-const pieceGarments = () => db.garments.filter(g => g.unit != 'กก.');
-const weightGarments = () => db.garments.filter(g => g.unit == 'กก.');
+/** รายการที่หักแพ็คเกจได้ / รายการที่คิดเงินเสมอ (หน่วย กก. หรือหมวดที่ไม่หักแพ็คเกจ) */
+const pieceGarments = () => db.garments.filter(pkgEligible);
+const weightGarments = () => db.garments.filter(g => !pkgEligible(g));
 
 /**
  * คำนวณยอด: ใช้แพ็คเกจก่อน ส่วนที่เกินจัดการได้ 3 แบบ (state.over)
@@ -16,7 +17,8 @@ function calc() {
   const { cart } = state, c = cust(state.sel), pieceG = pieceGarments(), wtG = weightGarments();
   const hasPkg = !!(c && c.pkgId);
   const pcsTot = pieceG.reduce((a, g) => a + (cart[g.id] || 0), 0);
-  const kgTot = wtG.reduce((a, g) => a + (cart[g.id] || 0), 0);
+  const kgTot = db.garments.filter(g => g.unit == 'กก.').reduce((a, g) => a + (cart[g.id] || 0), 0);
+  const allPcs = db.garments.filter(g => g.unit != 'กก.').reduce((a, g) => a + (cart[g.id] || 0), 0);
   const avail = c && active(c) ? c.left : 0, use = Math.min(avail, pcsTot), overflow = pcsTot - use;
   const owed = owedOf(c);
   // ยอดตั้งต้น: แพ็คเกจหมดอายุแล้ว ยอดบวกที่เหลือใช้ไม่ได้ แต่ยอดเกินยังอยู่
@@ -44,7 +46,8 @@ function calc() {
   const lines = pieceLines.concat(wtLines), itemPay = lines.reduce((a, l) => a + l.amt, 0);
   const pay = Math.round((itemPay + (renewInfo ? renewInfo.fee : 0)) * 100) / 100;
   return {
-    lines, use, overflow, owed, mode, renewInfo, carry, pay, pcsTot, kgTot: Math.round(kgTot * 100) / 100,
+    lines: lines.sort((a, b) => db.garments.indexOf(a.g) - db.garments.indexOf(b.g)),
+    use, overflow, owed, mode, renewInfo, carry, pay, pcsTot: allPcs, kgTot: Math.round(kgTot * 100) / 100,
     hasPkg, before: hasPkg ? c.left : null,
     left: renewInfo ? renewInfo.newLeft : (hasPkg ? base - use - carry : null),
     any: lines.some(l => l.q > 0)
@@ -158,22 +161,29 @@ function refreshOrder(ids) {
   (ids || []).forEach(id => { const g = db.garments.find(x => x.id == id), el = $('#t-' + id); if (g && el && g.unit != 'กก.') el.outerHTML = tileHTML(g); else if (g && el) { el.classList.toggle('on', !!state.cart[id]); const tq = el.querySelector('.tile-q'); if (tq) tq.textContent = state.cart[id] ? fm(state.cart[id]) + ' กก.' : ''; } });
   renderPart('#pos-sum', summaryHTML());
   renderPart('#pos-bar', barHTML());
-  const ph = $('#pg-piece-h'); if (ph) ph.innerHTML = pieceHead();
 }
-const pieceHead = () => { const c = cust(state.sel); return `<h2>รายการคิดตามชิ้น</h2>${c && active(c) ? badge('ใช้แพ็คเกจได้', 'success', 'check') : c && c.pkgId ? badge('ทบไปแพ็คเกจถัดไปได้', 'warning', 'layers') : ''}`; };
+
+/** หัวข้อของแต่ละหมวด พร้อมป้ายบอกว่าหักแพ็คเกจได้หรือไม่ */
+function groupHead(gr, items) {
+  const c = cust(state.sel), pcsItems = items.some(g => g.unit != 'กก.');
+  const tag = !gr.pkg || !pcsItems ? badge('ไม่หักจากแพ็คเกจ', 'neutral')
+    : c && active(c) ? badge('ใช้แพ็คเกจได้', 'success', 'check')
+    : c && c.pkgId ? badge('ทบไปแพ็คเกจถัดไปได้', 'warning', 'layers')
+    : badge('หักแพ็คเกจได้', 'primary', 'package');
+  return `<div class="sec-head" id="grp-${gr.id}"><h2>${esc(gr.name)}</h2>${tag}</div>`;
+}
 
 V.order = {
   render() {
-    const pg = pieceGarments(), wg = weightGarments();
+    const groups = db.groups.map(gr => ({ gr, items: db.garments.filter(g => grpOf(g) === gr) })).filter(x => x.items.length);
     return `
       <div class="pos">
         <div class="pos-main">
           ${pageHead('รับผ้า / คิดเงิน', 'เลือกลูกค้า เพิ่มรายการผ้า แล้วบันทึกเพื่อพิมพ์ใบเสร็จ')}
           <div class="card cust-card">${customerCard()}</div>
-          <div class="sec-head" id="pg-piece-h">${pieceHead()}</div>
-          ${pg.length ? `<div class="tile-grid">${pg.map(tileHTML).join('')}</div>`
-            : `<div class="card">${empty('shirt', 'ยังไม่มีรายการผ้า', 'เพิ่มประเภทผ้าและราคาได้ในหน้าผู้ดูแลระบบ', `<a class="btn btn-soft" href="#/set">${icon('shield')}ไปหน้าผู้ดูแลระบบ</a>`)}</div>`}
-          ${wg.length ? `<div class="sec-head"><h2>รายการคิดตามน้ำหนัก (กก.)</h2>${badge('ไม่หักจากแพ็คเกจ', 'neutral')}</div><div class="tile-grid">${wg.map(tileHTML).join('')}</div>` : ''}
+          ${groups.length > 1 ? `<nav class="grp-jump" aria-label="ไปยังหมวด">${groups.map(({ gr, items }) => `<button class="chip" data-act="grpJump" data-id="${gr.id}">${esc(gr.name)}<span class="chip-n">${items.length}</span></button>`).join('')}</nav>` : ''}
+          ${groups.length ? groups.map(({ gr, items }) => `${groupHead(gr, items)}<div class="tile-grid">${items.map(tileHTML).join('')}</div>`).join('')
+            : `<div class="card">${empty('shirt', 'ยังไม่มีรายการผ้า', 'เพิ่มหมวดและรายการผ้าได้ในหน้าผู้ดูแลระบบ', `<a class="btn btn-soft" href="#/set">${icon('shield')}ไปหน้าผู้ดูแลระบบ</a>`)}</div>`}
         </div>
         <aside class="pos-side"><div class="card sum" id="pos-sum">${summaryHTML()}</div></aside>
       </div>
@@ -182,6 +192,7 @@ V.order = {
 };
 
 /* ---------- actions ---------- */
+ACT.grpJump = el => { const h = $('#grp-' + el.dataset.id); if (h) h.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
 ACT.tileAdd = (el, e) => {
   if (e.target.closest('.stepper')) return;
   ACT.qty({ dataset: { id: el.dataset.id, d: '1' } });
@@ -247,7 +258,7 @@ ACT.checkout = () => {
   const c = cust(state.sel);
   const overTxt = cl.mode === 'carry' ? 'ทบแพ็คเกจถัดไป' : 'หักแพ็คเกจใหม่';
   const lines = cl.lines.map(l => ({
-    t: l.g.name, q: l.q, unit: l.g.unit, price: l.g.price, a: l.pay * l.g.price,
+    t: l.g.name, grp: grpOf(l.g).name, q: l.q, unit: l.g.unit, price: l.g.price, a: l.pay * l.g.price,
     note: [l.used ? `ใช้แพ็คเกจ ${l.used}${l.g.unit}` : '', l.over ? `เกิน ${l.over}${l.g.unit} (${overTxt})` : '', l.used && l.pay ? `จ่าย ${l.pay}${l.g.unit}` : ''].filter(Boolean).join(', ')
   }));
   let exp = cl.hasPkg ? c.exp : '';
