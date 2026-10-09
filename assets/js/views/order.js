@@ -170,7 +170,7 @@ function groupHead(gr, items) {
     : c && active(c) ? badge('ใช้แพ็คเกจได้', 'success', 'check')
     : c && c.pkgId ? badge('ทบไปแพ็คเกจถัดไปได้', 'warning', 'layers')
     : badge('หักแพ็คเกจได้', 'primary', 'package');
-  return `<div class="sec-head" id="grp-${gr.id}"><h2>${esc(gr.name)}</h2>${tag}</div>`;
+  return `<div class="sec-head grp-sec" id="grp-${gr.id}" style="${grpStyle(gr)}"><span class="grp-bar"></span><h2>${esc(gr.name)}</h2>${tag}</div>`;
 }
 
 V.order = {
@@ -181,8 +181,8 @@ V.order = {
         <div class="pos-main">
           ${pageHead('รับผ้า / คิดเงิน', 'เลือกลูกค้า เพิ่มรายการผ้า แล้วบันทึกเพื่อพิมพ์ใบเสร็จ')}
           <div class="card cust-card">${customerCard()}</div>
-          ${groups.length > 1 ? `<nav class="grp-jump" aria-label="ไปยังหมวด">${groups.map(({ gr, items }) => `<button class="chip" data-act="grpJump" data-id="${gr.id}">${esc(gr.name)}<span class="chip-n">${items.length}</span></button>`).join('')}</nav>` : ''}
-          ${groups.length ? groups.map(({ gr, items }) => `${groupHead(gr, items)}<div class="tile-grid">${items.map(tileHTML).join('')}</div>`).join('')
+          ${groups.length > 1 ? `<nav class="grp-jump" aria-label="ไปยังหมวด">${groups.map(({ gr, items }) => `<button class="chip grp-chip" style="${grpStyle(gr)}" data-act="grpJump" data-id="${gr.id}"><i class="grp-dot"></i>${esc(gr.name)}<span class="chip-n">${items.length}</span></button>`).join('')}</nav>` : ''}
+          ${groups.length ? groups.map(({ gr, items }) => `${groupHead(gr, items)}<div class="tile-grid grp-tiles" style="${grpStyle(gr)}">${items.map(tileHTML).join('')}</div>`).join('')
               + `<button class="btn btn-ghost manage-link" data-act="goPrice">${icon('layers')}เพิ่มหมวด / แก้ราคา (แอดมิน)</button>`
             : `<div class="card">${empty('shirt', 'ยังไม่มีรายการผ้า', 'เพิ่มหมวดและรายการผ้าได้ในหน้าผู้ดูแลระบบ', `<button class="btn btn-soft" data-act="goPrice">${icon('layers')}เพิ่มหมวดและราคา</button>`)}</div>`}
         </div>

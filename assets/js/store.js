@@ -6,6 +6,20 @@
 
 const KEY = 'laundry_v1';
 const UNITS = ['ชิ้น', 'กก.'];
+/** ชุดสีหมวด: [สีหลัก, ปลายไล่สี, พื้นอ่อน, ชื่อ] */
+const GRP_COLORS = {
+  indigo: ['#4f46e5', '#8b5cf6', '#eef0ff', 'ม่วงคราม'],
+  pink: ['#db2777', '#f43f5e', '#fdeef6', 'ชมพู'],
+  green: ['#059669', '#10b981', '#e3f8ef', 'เขียว'],
+  amber: ['#d97706', '#f59e0b', '#fff4e0', 'ส้มเหลือง'],
+  cyan: ['#0891b2', '#06b6d4', '#e3f8fc', 'ฟ้าน้ำทะเล'],
+  violet: ['#7c3aed', '#c026d3', '#f3edff', 'ม่วง'],
+  rose: ['#e11d48', '#f97316', '#ffeef1', 'แดงส้ม'],
+  sky: ['#0284c7', '#3b82f6', '#e6f4fe', 'ฟ้า'],
+  teal: ['#0f766e', '#14b8a6', '#e0f5f3', 'เขียวหัวเป็ด'],
+  brown: ['#a16207', '#b45309', '#fbf3e3', 'น้ำตาลทอง'],
+  slate: ['#475569', '#64748b', '#eef1f5', 'เทาเข้ม']
+};
 const DEF_PKG_TYPES = ['รายเดือน', 'รายวัน', 'อื่นๆ'];
 const DEF_CAT_IN = ['ค่าบริการซักรีด', 'ค่าแพ็คเกจ', 'อื่นๆ'];
 const DEF_CAT_OUT = ['ค่าน้ำยา/อุปกรณ์', 'ค่าน้ำ-ไฟ', 'ค่าเช่า', 'ค่าแรง', 'อื่นๆ'];
@@ -71,6 +85,9 @@ function migrate(d) {
     if (!UNITS.includes(gr.unit)) gr.unit = (items.length ? items.every(g => g.unit == 'กก.') : gr.id === 'grp-kg') ? 'กก.' : 'ชิ้น';
     if (gr.unit == 'กก.') gr.pkg = false;
   });
+  // สีของหมวด (ใช้ในหน้ารับผ้า)
+  const ck = Object.keys(GRP_COLORS);
+  d.groups.forEach((gr, i) => { if (!GRP_COLORS[gr.color]) gr.color = ck[i % ck.length]; });
   d.customers.forEach(c => { if (c.line == null) c.line = ''; if (c.phone == null) c.phone = ''; });
   return d;
 }
@@ -115,6 +132,8 @@ const avatarTone = id => { let h = 0; for (const c of String(id)) h = (h * 31 + 
 /* ---------- domain ---------- */
 const cust = id => db.customers.find(c => c.id == id);
 const grpById = id => db.groups.find(g => g.id == id) || db.groups[0];
+/** inline style ตัวแปรสีของหมวด: --g1 (สีหลัก) --g2 (ปลายไล่สี) --gbg (พื้นอ่อน) */
+const grpStyle = gr => { const c = GRP_COLORS[gr && gr.color] || GRP_COLORS.indigo; return `--g1:${c[0]};--g2:${c[1]};--gbg:${c[2]}`; };
 const grpOf = g => grpById(g.grp);
 /** รายการนี้หักจากแพ็คเกจได้ไหม: หน่วย “ชิ้น” และอยู่ในหมวดที่เปิดให้หักแพ็คเกจ */
 const pkgEligible = g => g.unit != 'กก.' && grpOf(g).pkg;

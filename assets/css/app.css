@@ -1283,6 +1283,27 @@ label.opt-row { cursor: pointer; }
 @media (max-width: 860px) { .sync-chip span { display: none; } }
 .sync-chip.s-neutral { color: var(--muted); border-style: dashed; }
 .tip-btns { display: flex; gap: 8px; flex-wrap: wrap; align-self: center; }
+
+/* ---------- สีของหมวด (--g1 สีหลัก, --g2 ไล่สี, --gbg พื้นอ่อน) ---------- */
+.grp-sec .grp-bar { width: 6px; height: 26px; border-radius: 99px; background: linear-gradient(180deg, var(--g1), var(--g2)); flex: none; }
+.grp-sec h2 { color: var(--g1); }
+.grp-chip .grp-dot { width: 10px; height: 10px; border-radius: 50%; background: linear-gradient(135deg, var(--g1), var(--g2)); }
+.grp-chip:hover { border-color: var(--g1); color: var(--g1); }
+.grp-tiles .tile .tile-ic { background: var(--gbg); color: var(--g1); }
+.grp-tiles .tile:hover { border-color: color-mix(in srgb, var(--g1) 40%, transparent); }
+.grp-tiles .tile.on { border-color: var(--g1); background: linear-gradient(180deg, #fff, var(--gbg)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--g1) 14%, transparent), var(--sh-sm); }
+.grp-tiles .tile.on .tile-ic { background: linear-gradient(135deg, var(--g1), var(--g2)); color: #fff; }
+.grp-tiles .stepper button:last-child, .grp-tiles .stepper.kg button:last-child { background: linear-gradient(135deg, var(--g1), var(--g2)); box-shadow: 0 4px 10px color-mix(in srgb, var(--g1) 32%, transparent); }
+.grp-tiles .tile-price { color: color-mix(in srgb, var(--g1) 55%, var(--muted)); }
+/* หน้าแอดมิน */
+.grp-card { border-left: 5px solid var(--g1); }
+.grp-card .grp-ic { background: linear-gradient(135deg, var(--g1), var(--g2)); }
+.grp-card .gar-ic, .grp-card .gar-ic.kg { background: var(--gbg); color: var(--g1); }
+.grp-colors { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; flex-basis: 100%; }
+.grp-colors > span { font-size: 13px; color: var(--muted); margin-right: 4px; }
+.swatch { width: 28px; height: 28px; border-radius: 50%; border: 0; cursor: pointer; background: linear-gradient(135deg, var(--s1), var(--s2)); box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--line); transition: transform .12s, box-shadow .12s; }
+.swatch:hover { transform: scale(1.12); }
+.swatch.on { box-shadow: 0 0 0 3px #fff, 0 0 0 5px var(--s1); transform: scale(1.08); }
 @media (max-width: 860px) { .alert:has(.tip-btns) { flex-wrap: wrap; } .tip-btns { width: 100%; } .tip-btns .btn { flex: 1; } }
 .dev-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-bottom: 18px; }
 .dev { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line-2); }

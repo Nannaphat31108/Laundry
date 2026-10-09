@@ -101,13 +101,14 @@ ADM.price = () => `<section class="card">
   </section>
   ${db.groups.map((gr, gi) => {
     const items = db.garments.filter(g => grpOf(g) === gr);
-    return `<section class="card grp-card">
+    return `<section class="card grp-card" style="${grpStyle(gr)}">
       <div class="grp-head">
         <div class="reorder"><button class="icon-btn sm" data-act="grpMove" data-id="${gr.id}" data-d="-1" ${gi ? '' : 'disabled'} aria-label="เลื่อนหมวดขึ้น">${icon('chevronUp')}</button><button class="icon-btn sm" data-act="grpMove" data-id="${gr.id}" data-d="1" ${gi < db.groups.length - 1 ? '' : 'disabled'} aria-label="เลื่อนหมวดลง">${icon('chevronDown')}</button></div>
         <div class="grp-name"><span class="grp-ic">${icon('layers')}</span><input value="${esc(gr.name)}" data-change="grpSet" data-id="${gr.id}" data-k="name" aria-label="ชื่อหมวด"></div>
         <div class="seg grp-unit" role="radiogroup" aria-label="คิดราคา">${[['ชิ้น', 'คิดตามชิ้น', 'shirt'], ['กก.', 'คิดตามน้ำหนัก', 'scale']].map(([u, l, ic]) => `<button class="${gr.unit === u ? 'on' : ''}" data-act="grpUnit" data-id="${gr.id}" data-u="${u}" role="radio" aria-checked="${gr.unit === u}">${icon(ic)}${l}</button>`).join('')}</div>
         ${gr.unit === 'กก.' ? `<span class="grp-pkg muted">${icon('coins')}คิดเงินทุกครั้ง (ไม่หักแพ็คเกจ)</span>`
           : `<label class="grp-pkg"><span class="switch"><input type="checkbox" ${gr.pkg ? 'checked' : ''} data-change="grpSet" data-id="${gr.id}" data-k="pkg"><i></i></span><span>หักแพ็คเกจได้</span></label>`}
+        <div class="grp-colors" role="radiogroup" aria-label="สีของหมวด"><span>สี</span>${Object.entries(GRP_COLORS).map(([k, c]) => `<button class="swatch ${gr.color === k ? 'on' : ''}" style="--s1:${c[0]};--s2:${c[1]}" data-act="grpColor" data-id="${gr.id}" data-c="${k}" role="radio" aria-checked="${gr.color === k}" title="${c[3]}" aria-label="สี${c[3]}"></button>`).join('')}</div>
         <div class="grp-actions">
           <button class="btn btn-soft btn-sm" data-act="addGar" data-grp="${gr.id}">${icon('plus')}เพิ่มรายการ</button>
           ${db.groups.length > 1 ? `<button class="btn btn-ghost btn-sm" data-act="grpCopy" data-id="${gr.id}" title="คัดลอกรายการจากหมวดอื่นมาใส่หมวดนี้">${icon('copy')}คัดลอกจากหมวดอื่น</button>` : ''}
@@ -293,18 +294,20 @@ A('addGar', el => {
 
 /* หมวดหมู่ */
 A('grpAdd', () => {
+  const used = db.groups.map(g => g.color), nextColor = Object.keys(GRP_COLORS).find(k => !used.includes(k)) || 'indigo';
   formDlg({
     title: 'เพิ่มหมวดใหม่', ic: 'layers', tone: 'pink',
     fields: [
       { k: 'name', l: 'ชื่อหมวด', req: true, ph: 'เช่น รีดอย่างเดียว / ซักแห้ง / ซักพับ' },
       { k: 'unit', l: 'คิดราคาแบบ', t: 'select', o: [['ชิ้น', 'คิดตามชิ้น (บาท/ชิ้น)'], ['กก.', 'คิดตามน้ำหนัก (บาท/กก.)']], half: true },
       { k: 'pkg', l: 'หักจากแพ็คเกจได้ไหม', t: 'select', o: [['yes', 'ได้ — ใช้ยอดแพ็คเกจ'], ['no', 'ไม่ได้ — คิดเงินทุกครั้ง']], half: true, hint: 'หมวดคิดตามน้ำหนักจะคิดเงินทุกครั้ง' },
+      { k: 'color', l: 'สีของหมวด', t: 'select', o: Object.entries(GRP_COLORS).map(([k, c]) => [k, c[3]]), hint: 'เปลี่ยนภายหลังได้โดยกดวงกลมสีในหัวหมวด' },
       { k: 'copy', l: 'เริ่มจากรายการของหมวด (ไม่บังคับ)', t: 'select', o: [['', '— เริ่มจากหมวดว่าง —']].concat(db.groups.map(gr => [gr.id, `คัดลอกรายการจาก “${gr.name}”`])), hint: 'คัดลอกชื่อและราคามาให้ แล้วค่อยแก้ราคาทีหลังได้' }
     ],
-    values: { unit: 'ชิ้น', pkg: 'yes', copy: '' }, okText: 'สร้างหมวด',
+    values: { unit: 'ชิ้น', pkg: 'yes', copy: '', color: nextColor }, okText: 'สร้างหมวด',
     onOk: o => {
       if (db.groups.some(gr => gr.name === o.name)) return { k: 'name', msg: 'มีหมวดชื่อนี้แล้ว' };
-      const gr = { id: 'grp-' + uid(), name: o.name, unit: o.unit, pkg: o.unit !== 'กก.' && o.pkg === 'yes' };
+      const gr = { id: 'grp-' + uid(), name: o.name, unit: o.unit, pkg: o.unit !== 'กก.' && o.pkg === 'yes', color: GRP_COLORS[o.color] ? o.color : nextColor };
       db.groups.push(gr);
       const n = o.copy ? copyGroupItems(o.copy, gr.id) : 0;
       state.admTab = 'price';
@@ -338,6 +341,11 @@ A('grpUnit', async el => {
   gr.pkg = u !== 'กก.';   // หมวดตามน้ำหนักคิดเงินเสมอ · กลับเป็นตามชิ้นให้หักแพ็คเกจได้ตามปกติ (ปิดเองได้)
   items.forEach(g => { g.unit = u; delete state.cart[g.id]; });
   save(); render(); toast(`หมวด “${gr.name}” คิดตาม${u === 'กก.' ? 'น้ำหนัก' : 'ชิ้น'}แล้ว`);
+});
+A('grpColor', el => {
+  const gr = db.groups.find(x => x.id == el.dataset.id); if (!gr || !GRP_COLORS[el.dataset.c]) return;
+  gr.color = el.dataset.c;
+  save(); render(); toast(`เปลี่ยนสีหมวด “${gr.name}” เป็น${GRP_COLORS[gr.color][3]}แล้ว`);
 });
 A('grpSet', el => {
   const gr = db.groups.find(x => x.id == el.dataset.id); if (!gr) return;
