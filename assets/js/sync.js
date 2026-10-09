@@ -153,12 +153,74 @@ function syncStart() {
     es.addEventListener('patch', e => syncOnEvent('patch', e));
     es.addEventListener('keep-alive', () => { sync.lastAt = Date.now(); });
     es.addEventListener('cancel', () => { syncStatus('denied'); });
-    es.onopen = () => { syncFlush(); };
+    es.onopen = () => { syncFlush(); syncHello(); };
     es.onerror = () => { if (sync.status !== 'denied') syncStatus('offline'); };
   } catch (e) { syncStatus('offline'); }
   syncFlush();
 }
 function syncStop() { if (sync.es) { sync.es.close(); sync.es = null; } sync.mirror = null; }
+
+/* ---------- รายชื่อเครื่องที่เชื่อมอยู่ (ไว้ตรวจว่าลิงก์กันจริง) ---------- */
+function devId() {
+  let id = '';
+  try { id = localStorage.getItem('laundry_device') || ''; if (!id) { id = 'd' + uid() + uid(); localStorage.setItem('laundry_device', id); } } catch (e) { id = 'd-temp'; }
+  return id;
+}
+function devLabel() {
+  const ua = navigator.userAgent;
+  const model = (ua.match(/Android [\d.]+; ([^;)]+?)(?: Build|\))/) || [])[1];
+  const os = /iPad|Macintosh.*Mobile/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ? 'iPad' : /iPhone/.test(ua) ? 'iPhone'
+    : /Android/.test(ua) ? 'Android' + (model ? ' ' + model.trim() : '') : /Windows/.test(ua) ? 'Windows' : /Mac/.test(ua) ? 'Mac' : 'อุปกรณ์';
+  const br = /Edg\//.test(ua) ? 'Edge' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : /Firefox\//.test(ua) ? 'Firefox' : '';
+  return os + (br ? ' · ' + br : '');
+}
+async function syncHello() {
+  if (!syncOn()) return;
+  try { await fetch(`${syncBase()}/devices/${devId()}.json`, { method: 'PUT', body: JSON.stringify({ name: devLabel(), at: Date.now() }) }); } catch (e) { /* ignore */ }
+}
+setInterval(() => { if (syncOn() && sync.status === 'ok') syncHello(); }, 5 * 60000);
+function devicesHTML() {
+  const list = Object.entries((sync.mirror && sync.mirror.devices) || {}).map(([id, d]) => Object.assign({ id }, d)).sort((a, b) => (b.at || 0) - (a.at || 0));
+  if (!list.length) return '';
+  const ago = t => { const m = Math.round((Date.now() - (+t || 0)) / 60000); return m < 2 ? 'ออนไลน์อยู่' : m < 60 ? m + ' นาทีที่แล้ว' : m < 1440 ? Math.round(m / 60) + ' ชั่วโมงที่แล้ว' : Math.round(m / 1440) + ' วันที่แล้ว'; };
+  return `<h3 class="mini-h">เครื่องที่เชื่อมกับร้านนี้ (${list.length} เครื่อง)</h3>
+    <div class="dev-list">${list.map(d => `<div class="dev"><span class="dev-ic">${icon(/Windows|Mac/.test(d.name) ? 'store' : 'phone')}</span>
+      <div><b>${esc(d.name || 'อุปกรณ์')}${d.id === devId() ? ' <em>(เครื่องนี้)</em>' : ''}</b><small>${ago(d.at)}</small></div></div>`).join('')}</div>`;
+}
+
+/** ตรวจการเชื่อมต่อทีละขั้น เพื่อบอกว่าติดตรงไหน */
+async function syncDiagnose() {
+  const rows = [];
+  const add = (ok, t, d = '') => rows.push({ ok, t, d });
+  add(navigator.onLine, 'อินเทอร์เน็ตของเครื่องนี้', navigator.onLine ? '' : 'ไม่ได้ต่ออินเทอร์เน็ต');
+  if (!syncOn()) {
+    add(false, 'เครื่องนี้เชื่อมกับร้านแล้ว', 'ยังไม่ได้เชื่อม — เครื่องหลักต้องตั้งค่าที่ ผู้ดูแลระบบ → หลายเครื่อง แล้วส่ง “ลิงก์เข้าร่วม” มาเปิดที่เครื่องนี้');
+    return rows;
+  }
+  add(true, 'เครื่องนี้เชื่อมกับร้านแล้ว', 'รหัสร้าน …' + syncCfg().key.slice(-6));
+  try {
+    const r = await fetch(syncBase() + '.json?shallow=true');
+    add(r.ok, 'อ่านข้อมูลจากฐานข้อมูล', r.ok ? '' : r.status === 401 || r.status === 403 ? 'ฐานข้อมูลไม่อนุญาต — ตรวจกฎ (Rules) ใน Firebase แล้วกด Publish' : 'HTTP ' + r.status);
+  } catch (e) { add(false, 'อ่านข้อมูลจากฐานข้อมูล', 'ติดต่อฐานข้อมูลไม่ได้ — ตรวจที่อยู่ฐานข้อมูล หรืออินเทอร์เน็ต'); }
+  try {
+    const r = await fetch(`${syncBase()}/devices/${devId()}.json`, { method: 'PUT', body: JSON.stringify({ name: devLabel(), at: Date.now() }) });
+    add(r.ok, 'บันทึกข้อมูลขึ้นฐานข้อมูล', r.ok ? '' : 'HTTP ' + r.status);
+  } catch (e) { add(false, 'บันทึกข้อมูลขึ้นฐานข้อมูล', 'ส่งข้อมูลไม่ได้'); }
+  const live = !!(sync.es && sync.es.readyState === 1);
+  add(live, 'รับข้อมูลจากเครื่องอื่นแบบทันที', live ? '' : 'การเชื่อมต่อแบบทันทีหลุด — กด “ซิงค์ตอนนี้”');
+  const n = Object.keys(sync.pending).length;
+  add(!n, 'ไม่มีข้อมูลค้างส่ง', n ? `ค้างส่ง ${n} รายการ (จะส่งเองเมื่อเชื่อมต่อได้)` : '');
+  const devs = Object.keys((sync.mirror && sync.mirror.devices) || {}).length;
+  add(devs > 1, 'มีเครื่องอื่นเชื่อมกับร้านนี้', devs > 1 ? `${devs} เครื่อง` : 'มีแค่เครื่องนี้ — เปิด “ลิงก์เข้าร่วม” ที่เครื่องอื่นด้วย');
+  return rows;
+}
+ACT.syncTest = async () => {
+  const m = openModal({ title: 'ตรวจการเชื่อมต่อหลายเครื่อง', ic: 'cloud', size: 'sm', body: '<p class="muted">กำลังตรวจ…</p>', footer: '<button class="btn btn-primary" data-close>ปิด</button>' });
+  const rows = await syncDiagnose();
+  m.q('.modal-body').innerHTML = `<div class="diag">${rows.map(r => `<div class="diag-row ${r.ok ? 'ok' : 'bad'}">${icon(r.ok ? 'checkCircle' : 'alert')}<div><b>${r.t}</b>${r.d ? `<small>${esc(r.d)}</small>` : ''}</div></div>`).join('')}</div>`;
+  render();
+};
+ACT.syncSetupGo = () => { state.admTab = 'sync'; if (state.route === 'set') render(); else go('set'); };
 window.addEventListener('online', () => { if (syncOn()) { syncStart(); } });
 
 /* ---------- สถานะ ---------- */
@@ -174,7 +236,7 @@ function syncStatus(s) {
   if (box) box.innerHTML = syncStateHTML();
 }
 function syncChip() {
-  if (!syncOn()) return '<span id="sync-chip" hidden></span>';
+  if (!syncOn()) return `<button id="sync-chip" class="admin-chip sync-chip s-neutral" data-act="syncSetupGo" title="เครื่องนี้ยังไม่ได้เชื่อมข้อมูลกับเครื่องอื่น">${icon('cloud')}<span>ยังไม่เชื่อมเครื่อง</span></button>`;
   const n = Object.keys(sync.pending).length, [txt, tone] = SYNC_TXT[sync.status] || SYNC_TXT.off;
   return `<button id="sync-chip" class="admin-chip sync-chip s-${tone}" data-act="syncInfo" title="${txt}">${icon('cloud')}<span>${sync.status === 'ok' ? 'ซิงค์แล้ว' : sync.status === 'offline' ? 'ออฟไลน์' : 'กำลังซิงค์'}</span>${n ? `<em>${n}</em>` : ''}</button>`;
 }
@@ -270,6 +332,8 @@ function syncPanel() {
     return `<section class="card">
         ${secHead('cloud', 'green', 'เชื่อมต่อหลายเครื่องอยู่', 'ทุกเครื่องที่เชื่อมจะเห็นข้อมูลชุดเดียวกันแบบเรียลไทม์')}
         <div class="sync-state" id="sync-state">${syncStateHTML()}</div>
+        <button class="btn btn-soft btn-sm" data-act="syncTest">${icon('checkCircle')}ตรวจการเชื่อมต่อ</button>
+        ${devicesHTML()}
         <h3 class="mini-h">เพิ่มเครื่องอื่น (มือถือ / แท็บเล็ต / คอมพิวเตอร์)</h3>
         <ol class="steps">
           <li>ส่งลิงก์ด้านล่างไปที่เครื่องนั้น (เช่น ส่งทาง LINE ให้ตัวเอง)</li>
@@ -349,8 +413,8 @@ ACT.syncInfo = () => {
   const [txt] = SYNC_TXT[sync.status] || SYNC_TXT.off, n = Object.keys(sync.pending).length;
   openModal({
     title: 'ข้อมูลหลายเครื่อง', subtitle: txt, ic: 'cloud', size: 'sm',
-    body: `<div class="sync-state">${syncStateHTML()}</div><p class="muted" style="margin-top:12px">${n ? 'มีรายการที่ยังไม่ได้ส่ง ระบบจะส่งให้อัตโนมัติเมื่อออนไลน์' : 'ข้อมูลเครื่องนี้ตรงกับเครื่องอื่นของร้าน'}</p>`,
-    footer: `<button class="btn btn-ghost" data-close>ปิด</button><button class="btn btn-primary" data-close data-act="syncNow">${icon('refresh')}ซิงค์ตอนนี้</button>`
+    body: `<div class="sync-state">${syncStateHTML()}</div><p class="muted" style="margin:12px 0">${n ? 'มีรายการที่ยังไม่ได้ส่ง ระบบจะส่งให้อัตโนมัติเมื่อออนไลน์' : 'ข้อมูลเครื่องนี้ตรงกับเครื่องอื่นของร้าน'}</p>${devicesHTML()}`,
+    footer: `<button class="btn btn-ghost" data-close data-act="syncTest">${icon('checkCircle')}ตรวจการเชื่อมต่อ</button><button class="btn btn-primary" data-close data-act="syncNow">${icon('refresh')}ซิงค์ตอนนี้</button>`
   });
 };
 ACT.syncNow = () => { syncStart(); };

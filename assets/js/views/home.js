@@ -79,8 +79,9 @@ V.home = {
     const week = sumBy(days, incOf);
 
     const age = backupAge();
-    const backupTip = !syncOn() && (age == null || age > 7)
-      ? `<div class="alert alert-info slim">${icon('shield')}<div>ข้อมูลทั้งหมดอยู่ในเครื่องนี้ ${age == null ? 'และยังไม่เคยสำรองข้อมูล' : 'สำรองล่าสุด ' + age + ' วันก่อน'} — แนะนำให้สำรองสัปดาห์ละครั้ง</div><button class="btn btn-sm btn-soft" data-act="backup">${icon('download')}สำรองเลย</button></div>` : '';
+    const backupTip = !syncOn()
+      ? `<div class="alert alert-info slim">${icon('cloud')}<div><b>ข้อมูลอยู่เฉพาะในเครื่องนี้</b> — เครื่องอื่นจะไม่เห็นข้อมูลชุดนี้จนกว่าจะเชื่อมหลายเครื่อง${age == null || age > 7 ? ` · ${age == null ? 'ยังไม่เคยสำรองข้อมูล' : 'สำรองล่าสุด ' + age + ' วันก่อน'}` : ''}</div>
+          <div class="tip-btns"><button class="btn btn-sm btn-primary" data-act="syncSetupGo">${icon('link')}เชื่อมหลายเครื่อง</button>${age == null || age > 7 ? `<button class="btn btn-sm btn-soft" data-act="backup">${icon('download')}สำรอง</button>` : ''}</div></div>` : '';
 
     const qa = [
       ['order', 'รับผ้า / คิดเงิน', 'บันทึกรายการและออกใบเสร็จ', 'washer', 'indigo'],

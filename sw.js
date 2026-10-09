@@ -1,7 +1,7 @@
 /* Service worker: ใช้งานออฟไลน์ได้
    - ไฟล์ของแอป (HTML/JS/CSS): ดึงจากเน็ตก่อน เพื่อให้ได้เวอร์ชันล่าสุดทันที ถ้าออฟไลน์ใช้ของในแคช
    - ไฟล์ภายนอก (ฟอนต์): ใช้แคชก่อน แล้วอัปเดตเบื้องหลัง */
-const V = 'laundry-v12';
+const V = 'laundry-v13';
 const F = [
   './', './index.html', './manifest.webmanifest',
   './assets/css/app.css',
@@ -19,7 +19,9 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   if (e.request.method != 'GET') return;
   const u = new URL(e.request.url);
-  if (/firebaseio\.com|firebasedatabase\.app/.test(u.hostname)) return; // ข้อมูลซิงค์: ไม่เก็บแคช
+  // เก็บแคชเฉพาะไฟล์ของแอปและฟอนต์ — ไม่ยุ่งกับข้อมูลซิงค์ / การเชื่อมต่อแบบสด / API อื่น ๆ
+  if ((e.request.headers.get('accept') || '').includes('text/event-stream')) return;
+  if (u.origin !== location.origin && !/^fonts\.(googleapis|gstatic)\.com$/.test(u.hostname)) return;
   const put = r => { if (r.ok || r.type === 'opaque') { const c = r.clone(); caches.open(V).then(x => x.put(e.request, c)); } return r; };
   if (u.origin === location.origin) {
     e.respondWith(fetch(e.request, { cache: 'no-cache' }).then(put).catch(() => caches.match(e.request, { ignoreSearch: true })));

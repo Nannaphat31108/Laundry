@@ -1281,6 +1281,27 @@ label.opt-row { cursor: pointer; }
 .sync-opt small { color: var(--muted); font-size: 13px; }
 .sync-opt .join-form { flex-basis: 100%; }
 @media (max-width: 860px) { .sync-chip span { display: none; } }
+.sync-chip.s-neutral { color: var(--muted); border-style: dashed; }
+.tip-btns { display: flex; gap: 8px; flex-wrap: wrap; align-self: center; }
+@media (max-width: 860px) { .alert:has(.tip-btns) { flex-wrap: wrap; } .tip-btns { width: 100%; } .tip-btns .btn { flex: 1; } }
+.dev-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-bottom: 18px; }
+.dev { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line-2); }
+.dev > div { display: flex; flex-direction: column; min-width: 0; }
+.dev b { font-size: 14px; font-weight: 600; }
+.dev b em { font-style: normal; color: var(--primary); font-weight: 500; }
+.dev small { color: var(--muted); font-size: 12.5px; }
+.dev-ic { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; flex: none; background: var(--primary-50); color: var(--primary); }
+.dev-ic .ic { width: 17px; height: 17px; }
+.sync-state + .btn { margin: -6px 0 18px; }
+.diag { display: flex; flex-direction: column; gap: 8px; }
+.diag-row { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; }
+.diag-row.ok { background: var(--green-bg); }
+.diag-row.ok > .ic { color: var(--green); }
+.diag-row.bad { background: var(--danger-bg); }
+.diag-row.bad > .ic { color: var(--danger); }
+.diag-row > div { display: flex; flex-direction: column; }
+.diag-row b { font-size: 14px; font-weight: 600; }
+.diag-row small { font-size: 13px; color: var(--ink-2); }
 
 /* หมวดผ้า: หน่วยราคามาจากหมวด (ไม่มีช่องเลือกหน่วยรายตัว) */
 .gar-head, .gar-row { grid-template-columns: 36px minmax(0, 1fr) 190px 40px; }
